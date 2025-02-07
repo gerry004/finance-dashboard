@@ -15,12 +15,11 @@ export async function GET() {
         { status: 500 }
       );
     } 
-    // Fetch database schema
+    
     const database = await notion.databases.retrieve({
       database_id: process.env.NOTION_DATABASE_ID!,
     });
 
-    // Fetch all pages (records) from the database
     const pages = await getAllPages();
 
     const response: NotionDatabaseData = {
