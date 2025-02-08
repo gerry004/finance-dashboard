@@ -98,6 +98,7 @@ function compareValues(a: any, b: any, direction: "asc" | "desc") {
 }
 
 export function NotionTable({ data }: NotionTableProps) {
+  console.log(data);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     column: null,
     direction: "asc",
