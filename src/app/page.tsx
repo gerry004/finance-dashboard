@@ -7,9 +7,6 @@ export default async function DashboardPage() {
     cache: 'no-store'
   });
   const data: NotionDatabaseData = await response.json();
-
-  console.log(data.schema.properties);
-  console.log(data.pages);
   
   return (
     <main className="container mx-auto py-10">
