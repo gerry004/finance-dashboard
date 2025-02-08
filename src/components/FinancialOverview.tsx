@@ -39,15 +39,23 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
     // Update income and expenditure
     if (type === 'income') {
       acc.income += amount;
+      // Update income tag totals
+      tags.forEach(tag => {
+        const tagName = tag.name;
+        if (tagName.toLowerCase() !== 'balance') {
+          acc.incomeByTag[tagName] = (acc.incomeByTag[tagName] || 0) + amount;
+        }
+      });
     } else if (type === 'expenditure') {
       acc.expenditure += Math.abs(amount);
+      // Update expenditure tag totals
+      tags.forEach(tag => {
+        const tagName = tag.name;
+        if (tagName.toLowerCase() !== 'balance') {
+          acc.expenditureByTag[tagName] = (acc.expenditureByTag[tagName] || 0) + Math.abs(amount);
+        }
+      });
     }
-
-    // Update tag totals
-    tags.forEach(tag => {
-      const tagName = tag.name;
-      acc.tagTotals[tagName] = (acc.tagTotals[tagName] || 0) + amount;
-    });
 
     // Update net worth
     acc.netWorth += amount;
@@ -57,7 +65,8 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
     income: 0,
     expenditure: 0,
     netWorth: 0,
-    tagTotals: {}
+    incomeByTag: {},
+    expenditureByTag: {}
   });
 
   // Define a color palette for the pie chart
@@ -74,20 +83,26 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
     '#2E7D32', // dark green
   ];
 
-  // Filter out the "Balance" tag and prepare chart data
-  const filteredTags = Object.entries(metrics.tagTotals)
-    .filter(([tagName]) => tagName.toLowerCase() !== 'balance')
-    .reduce((acc, [key, value]) => {
-      acc[key] = value;
-      return acc;
-    }, {} as Record<string, number>);
-
-  const chartData = {
-    labels: Object.keys(filteredTags),
+  // Prepare chart data for income
+  const incomeChartData = {
+    labels: Object.keys(metrics.incomeByTag),
     datasets: [
       {
-        data: Object.values(filteredTags),
-        backgroundColor: chartColors.slice(0, Object.keys(filteredTags).length),
+        data: Object.values(metrics.incomeByTag),
+        backgroundColor: chartColors.slice(0, Object.keys(metrics.incomeByTag).length),
+        borderColor: 'white',
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  // Prepare chart data for expenditure
+  const expenditureChartData = {
+    labels: Object.keys(metrics.expenditureByTag),
+    datasets: [
+      {
+        data: Object.values(metrics.expenditureByTag),
+        backgroundColor: chartColors.slice(0, Object.keys(metrics.expenditureByTag).length),
         borderColor: 'white',
         borderWidth: 2,
       },
@@ -109,7 +124,7 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
         callbacks: {
           label: (context: any) => {
             const value = context.raw;
-            return `$${Math.abs(value).toFixed(2)}`;
+            return `€${Math.abs(value).toFixed(2)}`;
           }
         }
       }
@@ -117,38 +132,42 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-green-100 rounded-lg">
-            <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
-            <p className="text-2xl font-bold text-green-900">
-              ${metrics.income.toFixed(2)}
-            </p>
-          </div>
-          <div className="p-4 bg-red-100 rounded-lg">
-            <h3 className="text-lg font-semibold text-red-800">Total Expenditure</h3>
-            <p className="text-2xl font-bold text-red-900">
-              ${metrics.expenditure.toFixed(2)}
-            </p>
-          </div>
-          <div className="p-4 bg-blue-100 rounded-lg">
-            <h3 className="text-lg font-semibold text-blue-800">Cashflow</h3>
-            <p className="text-2xl font-bold text-blue-900">
-              ${(metrics.income - metrics.expenditure).toFixed(2)}
-            </p>
-          </div>
-          <div className="p-4 bg-purple-100 rounded-lg">
-            <h3 className="text-lg font-semibold text-purple-800">Net Worth</h3>
-            <p className="text-2xl font-bold text-purple-900">
-              ${metrics.netWorth.toFixed(2)}
-            </p>
-          </div>
+    <div className="space-y-6 mb-8">
+      <div className="grid grid-cols-4 gap-4">
+        <div className="p-4 bg-green-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
+          <p className="text-2xl font-bold text-green-900">
+            €{metrics.income.toFixed(2)}
+          </p>
+        </div>
+        <div className="p-4 bg-red-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-red-800">Total Expenditure</h3>
+          <p className="text-2xl font-bold text-red-900">
+            €{metrics.expenditure.toFixed(2)}
+          </p>
+        </div>
+        <div className="p-4 bg-blue-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-800">Cashflow</h3>
+          <p className="text-2xl font-bold text-blue-900">
+            €{(metrics.income - metrics.expenditure).toFixed(2)}
+          </p>
+        </div>
+        <div className="p-4 bg-purple-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-purple-800">Net Worth</h3>
+          <p className="text-2xl font-bold text-purple-900">
+            €{metrics.netWorth.toFixed(2)}
+          </p>
         </div>
       </div>
-      <div className="p-4 bg-white rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Breakdown by Tag</h3>
-        <Pie data={chartData} options={chartOptions} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-4 bg-white rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Income by Tag</h3>
+          <Pie data={incomeChartData} options={chartOptions} />
+        </div>
+        <div className="p-4 bg-white rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Expenditure by Tag</h3>
+          <Pie data={expenditureChartData} options={chartOptions} />
+        </div>
       </div>
     </div>
   );
