@@ -29,7 +29,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="container mx-auto py-10">
-        <h1 className="text-4xl font-bold mb-8">Finance Dashboard</h1>
+        <h1 className="text-4xl font-bold mb-8">Personal Finance Dashboard</h1>
         <div>Loading...</div>
       </main>
     );
@@ -38,7 +38,7 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <main className="container mx-auto py-10">
-        <h1 className="text-4xl font-bold mb-8">Finance Dashboard</h1>
+        <h1 className="text-4xl font-bold mb-8">Personal Finance Dashboard</h1>
         <div>Error loading data</div>
       </main>
     );
@@ -46,7 +46,7 @@ export default function DashboardPage() {
   
   return (
     <main className="container mx-auto py-10">
-      <h1 className="text-4xl font-bold mb-8">Finance Dashboard</h1>
+      <h1 className="text-4xl font-bold mb-8">Personal Finance Dashboard</h1>
       <FinancialOverview data={data} />
       <NotionTable data={data} />
     </main>

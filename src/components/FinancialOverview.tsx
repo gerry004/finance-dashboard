@@ -39,7 +39,6 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
     // Update income and expenditure
     if (type === 'income') {
       acc.income += amount;
-      // Update income tag totals
       tags.forEach(tag => {
         const tagName = tag.name;
         if (tagName.toLowerCase() !== 'balance') {
@@ -48,13 +47,14 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
       });
     } else if (type === 'expenditure') {
       acc.expenditure += Math.abs(amount);
-      // Update expenditure tag totals
       tags.forEach(tag => {
         const tagName = tag.name;
         if (tagName.toLowerCase() !== 'balance') {
           acc.expenditureByTag[tagName] = (acc.expenditureByTag[tagName] || 0) + Math.abs(amount);
         }
       });
+    } else if (type === 'master') {
+      acc.master += amount;
     }
 
     // Update net worth
@@ -65,9 +65,30 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
     income: 0,
     expenditure: 0,
     netWorth: 0,
+    master: 0,
     incomeByTag: {},
     expenditureByTag: {}
   });
+
+  // Calculate checking balance
+  metrics.checking = metrics.income - metrics.expenditure + metrics.master;
+
+  // Sort tag totals and calculate percentages
+  const sortedIncomeTags = Object.entries(metrics.incomeByTag)
+    .map(([tag, amount]) => ({
+      tag,
+      amount: amount as number,
+      percentage: ((amount as number) / metrics.income) * 100
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const sortedExpenditureTags = Object.entries(metrics.expenditureByTag)
+    .map(([tag, amount]) => ({
+      tag,
+      amount: amount as number,
+      percentage: ((amount as number) / metrics.expenditure) * 100
+    }))
+    .sort((a, b) => b.amount - a.amount);
 
   // Define a color palette for the pie chart
   const chartColors = [
@@ -133,7 +154,7 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
 
   return (
     <div className="space-y-6 mb-8">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <div className="p-4 bg-green-100 rounded-lg">
           <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
           <p className="text-2xl font-bold text-green-900">
@@ -158,15 +179,81 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
             €{metrics.netWorth.toFixed(2)}
           </p>
         </div>
+        <div className="p-4 bg-amber-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-amber-800">Checking</h3>
+          <p className="text-2xl font-bold text-amber-900">
+            €{metrics.checking.toFixed(2)}
+          </p>
+        </div>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="p-4 bg-white rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Income by Tag</h3>
-          <Pie data={incomeChartData} options={chartOptions} />
+          <h3 className="text-lg font-semibold mb-4">Income Analysis</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="h-64">
+              <Pie data={incomeChartData} options={chartOptions} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Tag</th>
+                    <th className="text-right p-2">Amount</th>
+                    <th className="text-right p-2">Percentage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedIncomeTags.map(({ tag, amount, percentage }) => (
+                    <tr key={tag} className="border-b">
+                      <td className="p-2">{tag}</td>
+                      <td className="text-right p-2">€{amount.toFixed(2)}</td>
+                      <td className="text-right p-2">{percentage.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 font-bold bg-gray-50">
+                    <td className="p-2">Total</td>
+                    <td className="text-right p-2">€{metrics.income.toFixed(2)}</td>
+                    <td className="text-right p-2">100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
+
         <div className="p-4 bg-white rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Expenditure by Tag</h3>
-          <Pie data={expenditureChartData} options={chartOptions} />
+          <h3 className="text-lg font-semibold mb-4">Expenditure Analysis</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="h-64">
+              <Pie data={expenditureChartData} options={chartOptions} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Tag</th>
+                    <th className="text-right p-2">Amount</th>
+                    <th className="text-right p-2">Percentage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedExpenditureTags.map(({ tag, amount, percentage }) => (
+                    <tr key={tag} className="border-b">
+                      <td className="p-2">{tag}</td>
+                      <td className="text-right p-2">€{amount.toFixed(2)}</td>
+                      <td className="text-right p-2">{percentage.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 font-bold bg-gray-50">
+                    <td className="p-2">Total</td>
+                    <td className="text-right p-2">€{metrics.expenditure.toFixed(2)}</td>
+                    <td className="text-right p-2">100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>

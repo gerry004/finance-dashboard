@@ -98,18 +98,15 @@ function compareValues(a: any, b: any, direction: "asc" | "desc") {
 }
 
 export function NotionTable({ data }: NotionTableProps) {
-  console.log(data);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     column: null,
     direction: "asc",
   });
-  const [searchTerm, setSearchTerm] = useState("");
 
   const desiredOrder = ["Description", "Amount", "Type", "Tags", "Created"];
   const columns = Object.entries(data.schema.properties)
     .filter(([_, property]) => {
       if (property.type === "title") return true;
-
       return desiredOrder.some(
         (name) => property.name.toLowerCase() === name.toLowerCase()
       );
@@ -117,7 +114,6 @@ export function NotionTable({ data }: NotionTableProps) {
     .sort(([_, a], [__, b]) => {
       if (a.type === "title") return -1;
       if (b.type === "title") return 1;
-
       return desiredOrder.indexOf(a.name) - desiredOrder.indexOf(b.name);
     })
     .map(([id, property]) => ({
@@ -125,29 +121,14 @@ export function NotionTable({ data }: NotionTableProps) {
       name: property.name,
     }));
 
-  // Sort and filter pages
-  const sortedAndFilteredPages = data.pages
-    .filter((page) => {
-      const typedPage = page as PageObjectResponse;
-      const description =
-        typedPage.properties[
-          columns.find((col) => col.name === "Description")?.id || ""
-        ];
-      const descriptionText =
-        description?.type === "title"
-          ? description.title[0]?.plain_text || ""
-          : "";
-      return descriptionText.toLowerCase().includes(searchTerm.toLowerCase());
-    })
+  // Sort pages
+  const sortedPages = data.pages
     .sort((a, b) => {
       if (!sortConfig.column) return 0;
-
       const typedA = a as PageObjectResponse;
       const typedB = b as PageObjectResponse;
-
       const valueA = formatProperty(typedA.properties[sortConfig.column]);
       const valueB = formatProperty(typedB.properties[sortConfig.column]);
-
       return compareValues(valueA, valueB, sortConfig.direction);
     });
 
@@ -163,16 +144,7 @@ export function NotionTable({ data }: NotionTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="w-full max-w-md">
-        <input
-          type="text"
-          placeholder="Search descriptions..."
-          className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
+      <h2 className="text-2xl font-bold mb-4">Personal Finance Data</h2>
       <div className="overflow-x-auto rounded-lg">
         <table className="w-full border-collapse">
           <thead>
@@ -196,7 +168,7 @@ export function NotionTable({ data }: NotionTableProps) {
             </tr>
           </thead>
           <tbody>
-            {sortedAndFilteredPages.map((page) => {
+            {sortedPages.map((page) => {
               const typedPage = page as PageObjectResponse;
               return (
                 <tr key={page.id} className="border-b hover:bg-gray-50">
