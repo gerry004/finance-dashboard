@@ -154,6 +154,7 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
 
   return (
     <div className="space-y-6 mb-8">
+      <h2 className="text-2xl font-bold">Complete Overview</h2>
       <div className="grid grid-cols-5 gap-4">
         <div className="p-4 bg-green-100 rounded-lg">
           <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
