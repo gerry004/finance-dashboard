@@ -4,6 +4,7 @@ import { NotionDatabaseData } from "@/types/notion";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
 import { MonthlyOverview } from "@/components/MonthlyOverview";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
@@ -33,15 +34,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <main className="container mx-auto py-10">
-        <div className="flex flex-col justify-center items-center h-screen">
-          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900 dark:border-white"></div>
-          <p className="mt-4 text-xl text-gray-900 dark:text-white">Loading your financial data...</p>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">This may take a few moments</p>
-        </div>
-      </main>
-    );
+    return <LoadingSkeleton type="dashboard" />;
   }
 
   if (error) {
