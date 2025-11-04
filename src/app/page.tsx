@@ -3,20 +3,37 @@
 import { NotionDatabaseData } from "@/types/notion";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
-import { MonthlyOverview } from "@/components/MonthlyOverview";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
-import { useEffect, useState } from "react";
+import { TagFilterControl } from "@/components/TagFilterControl";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { extractAvailableTags } from "@/utils/notionHelpers";
+import { useEffect, useState, useMemo } from "react";
 
 export default function DashboardPage() {
   const [data, setData] = useState<NotionDatabaseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [excludedTags, setExcludedTags] = useState<Set<string>>(new Set());
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const response = await fetch(`${baseUrl}/api/notion`);
+        
+        // Build query string with date parameters
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const queryString = params.toString();
+        
+        const url = `${baseUrl}/api/notion${queryString ? `?${queryString}` : ''}`;
+        const response = await fetch(url);
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -31,7 +48,19 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, []);
+  }, [startDate, endDate]);
+
+  // Extract available tags from schema
+  const availableTags = useMemo(() => {
+    if (!data) return [];
+    return extractAvailableTags(data.schema);
+  }, [data]);
+
+  // Handle date range change
+  const handleDateRangeChange = (newStartDate: string | null, newEndDate: string | null) => {
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+  };
 
   if (loading) {
     return <LoadingSkeleton type="dashboard" />;
@@ -70,9 +99,18 @@ export default function DashboardPage() {
   return (
     <main className="container mx-auto py-10">
       <h1 className="text-4xl font-bold mb-8">Personal Finance Dashboard</h1>
-      <MonthlyOverview data={data} />
-      <FinancialOverview data={data} />
-      <NotionTable data={data} />
+      <DateRangePicker
+        startDate={startDate}
+        endDate={endDate}
+        onDateRangeChange={handleDateRangeChange}
+      />
+      <TagFilterControl
+        availableTags={availableTags}
+        excludedTags={excludedTags}
+        onExcludedTagsChange={setExcludedTags}
+      />
+      <FinancialOverview data={data} excludedTags={excludedTags} />
+      <NotionTable data={data} excludedTags={excludedTags} />
     </main>
   );
 }

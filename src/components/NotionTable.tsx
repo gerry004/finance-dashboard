@@ -6,6 +6,7 @@ import { useState } from "react";
 
 interface NotionTableProps {
   data: NotionDatabaseData;
+  excludedTags: Set<string>;
 }
 
 const colorMap = {
@@ -33,7 +34,7 @@ type SortConfig = {
   direction: "asc" | "desc";
 };
 
-function formatProperty(property: any) {
+function formatProperty(property: any, excludedTags?: Set<string>) {
   if (!property) return "";
 
   switch (property.type) {
@@ -55,16 +56,18 @@ function formatProperty(property: any) {
       return property.date?.start || "";
 
     case "multi_select":
-      return property.multi_select.map((item: any) => (
-        <span
-          key={item.id}
-          className={`mr-1 px-2 py-1 rounded text-sm ${
-            colorMap[item.color as keyof typeof colorMap]
-          }`}
-        >
-          {item.name}
-        </span>
-      ));
+      return property.multi_select
+        .filter((item: any) => !excludedTags?.has(item.name))
+        .map((item: any) => (
+          <span
+            key={item.id}
+            className={`mr-1 px-2 py-1 rounded text-sm ${
+              colorMap[item.color as keyof typeof colorMap]
+            }`}
+          >
+            {item.name}
+          </span>
+        ));
 
     case "title":
       return property.title[0]?.plain_text || "";
@@ -97,7 +100,7 @@ function compareValues(a: any, b: any, direction: "asc" | "desc") {
   return direction === "asc" ? (a < b ? -1 : 1) : a < b ? 1 : -1;
 }
 
-export function NotionTable({ data }: NotionTableProps) {
+export function NotionTable({ data, excludedTags }: NotionTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     column: null,
     direction: "asc",
@@ -121,8 +124,17 @@ export function NotionTable({ data }: NotionTableProps) {
       name: property.name,
     }));
 
-  // Sort pages
+  // Filter and sort pages client-side
   const sortedPages = data.pages
+    .filter((page) => {
+      const typedPage = page as PageObjectResponse;
+      const tags = typedPage.properties['Tags']?.type === 'multi_select'
+        ? typedPage.properties['Tags'].multi_select
+        : [];
+      
+      // Include page if it has no tags or at least one non-excluded tag
+      return tags.length === 0 || tags.some(tag => !excludedTags.has(tag.name));
+    })
     .sort((a, b) => {
       if (!sortConfig.column) return 0;
       const typedA = a as PageObjectResponse;
@@ -144,7 +156,6 @@ export function NotionTable({ data }: NotionTableProps) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold mb-4">Personal Finance Data</h2>
       <div className="overflow-x-auto rounded-lg">
         <table className="w-full border-collapse">
           <thead>
@@ -176,7 +187,7 @@ export function NotionTable({ data }: NotionTableProps) {
                     const property = typedPage.properties[column.id];
                     return (
                       <td key={column.id} className="p-2 border">
-                        {formatProperty(property)}
+                        {formatProperty(property, excludedTags)}
                       </td>
                     );
                   })}

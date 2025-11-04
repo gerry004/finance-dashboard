@@ -15,9 +15,10 @@ ChartJS.register(ArcElement, Tooltip, Legend, Colors);
 
 interface FinancialOverviewProps {
   data: NotionDatabaseData;
+  excludedTags: Set<string>;
 }
 
-export function FinancialOverview({ data }: FinancialOverviewProps) {
+export function FinancialOverview({ data, excludedTags }: FinancialOverviewProps) {
   // Helper function to get amount from property
   const getAmount = (property: any): number => {
     if (!property || property.type !== 'number') return 0;
@@ -25,50 +26,62 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
     return typeof amount === 'string' ? parseFloat(amount) : amount;
   };
 
-  // Calculate financial metrics
-  const metrics = data.pages.reduce((acc: any, page) => {
-    const typedPage = page as PageObjectResponse;
-    const amount = getAmount(typedPage.properties['Amount']);
-    const type = typedPage.properties['Type']?.type === 'select' 
-      ? typedPage.properties['Type'].select?.name?.toLowerCase()
-      : '';
-    const tags = typedPage.properties['Tags']?.type === 'multi_select' 
-      ? typedPage.properties['Tags'].multi_select
-      : [];
+  // Filter pages client-side and calculate financial metrics
+  const metrics = data.pages
+    .filter((page) => {
+      const typedPage = page as PageObjectResponse;
+      const tags = typedPage.properties['Tags']?.type === 'multi_select' 
+        ? typedPage.properties['Tags'].multi_select
+        : [];
+      
+      // Include page if it has no tags or at least one non-excluded tag
+      return tags.length === 0 || tags.some(tag => !excludedTags.has(tag.name));
+    })
+    .reduce((acc: any, page) => {
+      const typedPage = page as PageObjectResponse;
+      const amount = getAmount(typedPage.properties['Amount']);
+      const type = typedPage.properties['Type']?.type === 'select' 
+        ? typedPage.properties['Type'].select?.name?.toLowerCase()
+        : '';
+      const tags = typedPage.properties['Tags']?.type === 'multi_select' 
+        ? typedPage.properties['Tags'].multi_select
+        : [];
 
-    // Update income and expenditure
-    if (type === 'income') {
-      acc.income += amount;
-      tags.forEach(tag => {
-        const tagName = tag.name;
-        if (tagName.toLowerCase() !== 'balance') {
-          acc.incomeByTag[tagName] = (acc.incomeByTag[tagName] || 0) + amount;
-        }
-      });
-    } else if (type === 'expenditure') {
-      acc.expenditure += Math.abs(amount);
-      tags.forEach(tag => {
-        const tagName = tag.name;
-        if (tagName.toLowerCase() !== 'balance') {
-          acc.expenditureByTag[tagName] = (acc.expenditureByTag[tagName] || 0) + Math.abs(amount);
-        }
-      });
-    } else if (type === 'master') {
-      acc.master += amount;
-    }
+      // Update income and expenditure
+      if (type === 'income') {
+        acc.income += amount;
+        // Only include non-excluded tags in the breakdown
+        tags.forEach(tag => {
+          const tagName = tag.name;
+          if (!excludedTags.has(tagName)) {
+            acc.incomeByTag[tagName] = (acc.incomeByTag[tagName] || 0) + amount;
+          }
+        });
+      } else if (type === 'expenditure') {
+        acc.expenditure += Math.abs(amount);
+        // Only include non-excluded tags in the breakdown
+        tags.forEach(tag => {
+          const tagName = tag.name;
+          if (!excludedTags.has(tagName)) {
+            acc.expenditureByTag[tagName] = (acc.expenditureByTag[tagName] || 0) + Math.abs(amount);
+          }
+        });
+      } else if (type === 'master') {
+        acc.master += amount;
+      }
 
-    // Update net worth
-    acc.netWorth += amount;
+      // Update net worth
+      acc.netWorth += amount;
 
-    return acc;
-  }, {
-    income: 0,
-    expenditure: 0,
-    netWorth: 0,
-    master: 0,
-    incomeByTag: {},
-    expenditureByTag: {}
-  });
+      return acc;
+    }, {
+      income: 0,
+      expenditure: 0,
+      netWorth: 0,
+      master: 0,
+      incomeByTag: {},
+      expenditureByTag: {}
+    });
 
   // Calculate checking balance
   metrics.checking = metrics.income - metrics.expenditure + metrics.master;
@@ -154,7 +167,6 @@ export function FinancialOverview({ data }: FinancialOverviewProps) {
 
   return (
     <div className="space-y-6 mb-8">
-      <h2 className="text-2xl font-bold">Complete Overview</h2>
       <div className="grid grid-cols-5 gap-4">
         <div className="p-4 bg-green-100 rounded-lg">
           <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
