@@ -23,15 +23,7 @@ export default function DashboardPage() {
       setError(null);
       try {
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        
-        // Build query string with date parameters
-        const params = new URLSearchParams();
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
-        
-        const queryString = params.toString();
-        
-        const url = `${baseUrl}/api/notion${queryString ? `?${queryString}` : ''}`;
+        const url = `${baseUrl}/api/notion`;
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -48,7 +40,7 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, [startDate, endDate]);
+  }, []);
 
   // Extract available tags from schema
   const availableTags = useMemo(() => {
@@ -109,8 +101,18 @@ export default function DashboardPage() {
         excludedTags={excludedTags}
         onExcludedTagsChange={setExcludedTags}
       />
-      <FinancialOverview data={data} excludedTags={excludedTags} />
-      <NotionTable data={data} excludedTags={excludedTags} />
+      <FinancialOverview 
+        data={data} 
+        excludedTags={excludedTags}
+        startDate={startDate}
+        endDate={endDate}
+      />
+      <NotionTable 
+        data={data} 
+        excludedTags={excludedTags}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </main>
   );
 }

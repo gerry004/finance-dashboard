@@ -16,9 +16,11 @@ ChartJS.register(ArcElement, Tooltip, Legend, Colors);
 interface FinancialOverviewProps {
   data: NotionDatabaseData;
   excludedTags: Set<string>;
+  startDate: string | null;
+  endDate: string | null;
 }
 
-export function FinancialOverview({ data, excludedTags }: FinancialOverviewProps) {
+export function FinancialOverview({ data, excludedTags, startDate, endDate }: FinancialOverviewProps) {
   // Helper function to get amount from property
   const getAmount = (property: any): number => {
     if (!property || property.type !== 'number') return 0;
@@ -26,10 +28,42 @@ export function FinancialOverview({ data, excludedTags }: FinancialOverviewProps
     return typeof amount === 'string' ? parseFloat(amount) : amount;
   };
 
+  // Helper function to check if a date is within the range
+  const isDateInRange = (dateString: string | null | undefined): boolean => {
+    if (!dateString) return true; // Include if no date property
+    
+    const pageDate = new Date(dateString);
+    
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return pageDate >= start && pageDate <= end;
+    } else if (startDate) {
+      const start = new Date(startDate);
+      return pageDate >= start;
+    } else if (endDate) {
+      const end = new Date(endDate);
+      return pageDate <= end;
+    }
+    
+    return true; // Include if no date filter is set
+  };
+
   // Filter pages client-side and calculate financial metrics
   const metrics = data.pages
     .filter((page) => {
       const typedPage = page as PageObjectResponse;
+      
+      // Filter by date range
+      const createdDate = typedPage.properties['Created']?.type === 'date'
+        ? typedPage.properties['Created'].date?.start
+        : null;
+      
+      if (!isDateInRange(createdDate)) {
+        return false;
+      }
+      
+      // Filter by tags
       const tags = typedPage.properties['Tags']?.type === 'multi_select' 
         ? typedPage.properties['Tags'].multi_select
         : [];

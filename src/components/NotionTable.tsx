@@ -7,6 +7,8 @@ import { useState } from "react";
 interface NotionTableProps {
   data: NotionDatabaseData;
   excludedTags: Set<string>;
+  startDate: string | null;
+  endDate: string | null;
 }
 
 const colorMap = {
@@ -100,11 +102,32 @@ function compareValues(a: any, b: any, direction: "asc" | "desc") {
   return direction === "asc" ? (a < b ? -1 : 1) : a < b ? 1 : -1;
 }
 
-export function NotionTable({ data, excludedTags }: NotionTableProps) {
+export function NotionTable({ data, excludedTags, startDate, endDate }: NotionTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     column: null,
     direction: "asc",
   });
+
+  // Helper function to check if a date is within the range
+  const isDateInRange = (dateString: string | null | undefined): boolean => {
+    if (!dateString) return true; // Include if no date property
+    
+    const pageDate = new Date(dateString);
+    
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return pageDate >= start && pageDate <= end;
+    } else if (startDate) {
+      const start = new Date(startDate);
+      return pageDate >= start;
+    } else if (endDate) {
+      const end = new Date(endDate);
+      return pageDate <= end;
+    }
+    
+    return true; // Include if no date filter is set
+  };
 
   const desiredOrder = ["Description", "Amount", "Type", "Tags", "Created"];
   const columns = Object.entries(data.schema.properties)
@@ -128,6 +151,17 @@ export function NotionTable({ data, excludedTags }: NotionTableProps) {
   const sortedPages = data.pages
     .filter((page) => {
       const typedPage = page as PageObjectResponse;
+      
+      // Filter by date range
+      const createdDate = typedPage.properties['Created']?.type === 'date'
+        ? typedPage.properties['Created'].date?.start
+        : null;
+      
+      if (!isDateInRange(createdDate)) {
+        return false;
+      }
+      
+      // Filter by tags
       const tags = typedPage.properties['Tags']?.type === 'multi_select'
         ? typedPage.properties['Tags'].multi_select
         : [];
