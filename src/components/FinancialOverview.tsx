@@ -104,14 +104,10 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
         acc.master += amount;
       }
 
-      // Update net worth
-      acc.netWorth += amount;
-
       return acc;
     }, {
       income: 0,
       expenditure: 0,
-      netWorth: 0,
       master: 0,
       incomeByTag: {},
       expenditureByTag: {}
@@ -201,7 +197,7 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
 
   return (
     <div className="space-y-6 mb-8">
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="p-4 bg-green-100 rounded-lg">
           <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
           <p className="text-2xl font-bold text-green-900">
@@ -218,12 +214,6 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
           <h3 className="text-lg font-semibold text-blue-800">Cashflow</h3>
           <p className="text-2xl font-bold text-blue-900">
             €{(metrics.income - metrics.expenditure).toFixed(2)}
-          </p>
-        </div>
-        <div className="p-4 bg-purple-100 rounded-lg">
-          <h3 className="text-lg font-semibold text-purple-800">Net Worth</h3>
-          <p className="text-2xl font-bold text-purple-900">
-            €{metrics.netWorth.toFixed(2)}
           </p>
         </div>
         <div className="p-4 bg-amber-100 rounded-lg">
