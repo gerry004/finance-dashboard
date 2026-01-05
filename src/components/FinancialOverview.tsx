@@ -102,6 +102,16 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
         });
       } else if (type === 'master') {
         acc.master += amount;
+      } else if (type === 'investment') {
+        // Check if tags contain 'buy' or 'sell'
+        const hasBuyTag = tags.some(tag => tag.name.toLowerCase() === 'buy');
+        const hasSellTag = tags.some(tag => tag.name.toLowerCase() === 'sell');
+        
+        if (hasBuyTag) {
+          acc.investmentBuys += Math.abs(amount);
+        } else if (hasSellTag) {
+          acc.investmentSells += Math.abs(amount);
+        }
       }
 
       return acc;
@@ -109,12 +119,14 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
       income: 0,
       expenditure: 0,
       master: 0,
+      investmentBuys: 0,
+      investmentSells: 0,
       incomeByTag: {},
       expenditureByTag: {}
     });
 
   // Calculate checking balance
-  metrics.checking = metrics.income - metrics.expenditure + metrics.master;
+  metrics.checking = metrics.master + metrics.income - metrics.expenditure + metrics.investmentSells - metrics.investmentBuys;
 
   // Sort tag totals and calculate percentages
   const sortedIncomeTags = Object.entries(metrics.incomeByTag)
