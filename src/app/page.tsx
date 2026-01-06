@@ -30,6 +30,14 @@ export default function DashboardPage() {
   // Middleware handles API authentication, but we need to check client-side for UI
   useEffect(() => {
     const checkAuthStatus = async () => {
+      // First check sessionStorage - if it doesn't exist, user closed the tab/browser
+      const sessionAuth = sessionStorage.getItem('dashboard_authenticated');
+      if (!sessionAuth) {
+        setIsAuthenticated(false);
+        return;
+      }
+
+      // If sessionStorage exists, verify with server
       try {
         const response = await fetch('/api/auth/verify', { credentials: 'include' });
         const data = await response.json();

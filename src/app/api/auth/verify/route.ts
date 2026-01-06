@@ -20,7 +20,7 @@ export async function POST(request: Request) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 24, // 24 hours (session will end when browser closes anyway)
+        // No maxAge - this makes it a session cookie that expires when browser closes
       });
 
       return NextResponse.json({ authenticated: true });
