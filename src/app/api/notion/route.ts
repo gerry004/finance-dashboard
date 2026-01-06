@@ -2,12 +2,17 @@ import { Client } from "@notionhq/client";
 import { NextResponse } from "next/server";
 import { NotionDatabaseData } from "@/types/notion";
 import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import { requireAuth } from "@/utils/auth";
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
 export async function GET(request: Request) {
+  // Check authentication
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
       return NextResponse.json(

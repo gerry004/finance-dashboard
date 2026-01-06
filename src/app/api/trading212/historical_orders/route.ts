@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/utils/auth";
+import { getTrading212Credentials, createTrading212AuthHeader, handleTrading212Error } from "@/utils/trading212";
 
 export async function GET() {
-  try {
-    const apiKey = process.env.TRADING_212_API_KEY;
-    const apiSecret = process.env.TRADING_212_API_SECRET;
+  // Check authentication
+  const authError = await requireAuth();
+  if (authError) return authError;
 
-    if (!apiKey || !apiSecret) {
-      return NextResponse.json(
-        { error: "Missing required environment variables: TRADING_212_API_KEY or TRADING_212_API_SECRET" },
-        { status: 500 }
-      );
+  try {
+    const credentials = getTrading212Credentials();
+    if (credentials instanceof NextResponse) {
+      return credentials;
     }
     
-    // Create Basic Auth header
-    const authHeader = 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+    const authHeader = createTrading212AuthHeader(credentials);
 
     const allOrders = [];
     const limit = 20;
@@ -35,11 +35,7 @@ export async function GET() {
 
       if (!resp.ok) {
         const errorText = await resp.text();
-        console.error('Trading 212 API error:', resp.status, errorText);
-        return NextResponse.json(
-          { error: `Trading 212 API error: ${resp.status}`, details: errorText },
-          { status: resp.status }
-        );
+        return handleTrading212Error(resp, errorText);
       }
 
       const data = await resp.text();

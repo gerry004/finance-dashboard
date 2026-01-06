@@ -8,10 +8,13 @@ import { InvestmentsOverview } from "@/components/InvestmentsOverview";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
+import { authenticatedFetch, handleUnauthorized } from "@/utils/apiClient";
 import { useEffect, useState, useMemo } from "react";
 
 export default function DashboardPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [data, setData] = useState<NotionDatabaseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,16 +26,52 @@ export default function DashboardPage() {
   const [trading212Error, setTrading212Error] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
 
+  // Check authentication status on mount
   useEffect(() => {
+    const checkAuthStatus = async () => {
+      // First check sessionStorage
+      const sessionAuth = sessionStorage.getItem('dashboard_authenticated');
+      if (sessionAuth === 'true') {
+        // Verify with server
+        try {
+          const response = await authenticatedFetch('/api/auth/verify');
+          const data = await response.json();
+          if (data.authenticated) {
+            setIsAuthenticated(true);
+          } else {
+            sessionStorage.removeItem('dashboard_authenticated');
+            setIsAuthenticated(false);
+          }
+        } catch (error) {
+          console.error('Error checking auth:', error);
+          setIsAuthenticated(false);
+        }
+      } else {
+        setIsAuthenticated(false);
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
+
+  const handleAuthenticated = () => {
+    setIsAuthenticated(true);
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const url = `${baseUrl}/api/notion`;
-        const response = await fetch(url);
+        const response = await authenticatedFetch('/api/notion');
         
         if (!response.ok) {
+          if (handleUnauthorized(response)) {
+            setIsAuthenticated(false);
+            return;
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const notionData = await response.json();
@@ -46,19 +85,23 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, []);
+  }, [isAuthenticated]);
 
   // Fetch Trading 212 open positions
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const fetchTrading212Positions = async () => {
       setTrading212Loading(true);
       setTrading212Error(null);
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const url = `${baseUrl}/api/trading212`;
-        const response = await fetch(url);
+        const response = await authenticatedFetch('/api/trading212');
         
         if (!response.ok) {
+          if (handleUnauthorized(response)) {
+            setIsAuthenticated(false);
+            return;
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const trading212Data = await response.json();
@@ -90,17 +133,21 @@ export default function DashboardPage() {
     };
 
     fetchTrading212Positions();
-  }, []);
+  }, [isAuthenticated]);
 
   // Fetch Trading 212 historical orders
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const fetchHistoricalOrders = async () => {
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const url = `${baseUrl}/api/trading212/historical_orders`;
-        const response = await fetch(url);
+        const response = await authenticatedFetch('/api/trading212/historical_orders');
         
         if (!response.ok) {
+          if (handleUnauthorized(response)) {
+            setIsAuthenticated(false);
+            return;
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const ordersData = await response.json();
@@ -111,7 +158,7 @@ export default function DashboardPage() {
     };
 
     fetchHistoricalOrders();
-  }, []);
+  }, [isAuthenticated]);
 
   // Extract available tags from schema
   const availableTags = useMemo(() => {
@@ -124,6 +171,16 @@ export default function DashboardPage() {
     setStartDate(newStartDate);
     setEndDate(newEndDate);
   };
+
+  // Show loading while checking authentication
+  if (isAuthenticated === null) {
+    return <LoadingSkeleton type="dashboard" />;
+  }
+
+  // Show passcode prompt if not authenticated
+  if (!isAuthenticated) {
+    return <PasscodePrompt onAuthenticated={handleAuthenticated} />;
+  }
 
   if (loading) {
     return <LoadingSkeleton type="dashboard" />;
