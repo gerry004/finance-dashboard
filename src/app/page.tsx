@@ -1,8 +1,10 @@
 'use client';
 
 import { NotionDatabaseData } from "@/types/notion";
+import { Trading212Position } from "@/types/trading212";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
+import { InvestmentsOverview } from "@/components/InvestmentsOverview";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -16,6 +18,10 @@ export default function DashboardPage() {
   const [excludedTags, setExcludedTags] = useState<Set<string>>(new Set());
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [trading212Positions, setTrading212Positions] = useState<Trading212Position[] | null>(null);
+  const [trading212Loading, setTrading212Loading] = useState(true);
+  const [trading212Error, setTrading212Error] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -40,6 +46,71 @@ export default function DashboardPage() {
     };
 
     fetchData();
+  }, []);
+
+  // Fetch Trading 212 open positions
+  useEffect(() => {
+    const fetchTrading212Positions = async () => {
+      setTrading212Loading(true);
+      setTrading212Error(null);
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        const url = `${baseUrl}/api/trading212`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const trading212Data = await response.json();
+        console.log('Trading 212 Open Positions:', trading212Data);
+        
+        // Extract positions from the response
+        // The API returns { data: [...] } so we need to handle that
+        if (trading212Data.data) {
+          // Check if data is an array
+          if (Array.isArray(trading212Data.data)) {
+            setTrading212Positions(trading212Data.data);
+          } else if (trading212Data.data.error) {
+            setTrading212Error(trading212Data.data.error);
+          } else {
+            // If data is an object, try to find positions array
+            setTrading212Positions([]);
+          }
+        } else if (trading212Data.error) {
+          setTrading212Error(trading212Data.error);
+        } else {
+          setTrading212Positions([]);
+        }
+      } catch (error) {
+        console.error('Error fetching Trading 212 positions:', error);
+        setTrading212Error(error instanceof Error ? error.message : 'An error occurred while fetching Trading 212 positions');
+      } finally {
+        setTrading212Loading(false);
+      }
+    };
+
+    fetchTrading212Positions();
+  }, []);
+
+  // Fetch Trading 212 historical orders
+  useEffect(() => {
+    const fetchHistoricalOrders = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+        const url = `${baseUrl}/api/trading212/historical_orders`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const ordersData = await response.json();
+        console.log('Trading 212 Historical Orders:', ordersData);
+      } catch (error) {
+        console.error('Error fetching Trading 212 historical orders:', error);
+      }
+    };
+
+    fetchHistoricalOrders();
   }, []);
 
   // Extract available tags from schema
@@ -90,29 +161,66 @@ export default function DashboardPage() {
   
   return (
     <main className="container mx-auto py-10">
-      <h1 className="text-4xl font-bold mb-8">Personal Finance Dashboard</h1>
-      <DateRangePicker
-        startDate={startDate}
-        endDate={endDate}
-        onDateRangeChange={handleDateRangeChange}
-      />
-      <TagFilterControl
-        availableTags={availableTags}
-        excludedTags={excludedTags}
-        onExcludedTagsChange={setExcludedTags}
-      />
-      <FinancialOverview 
-        data={data} 
-        excludedTags={excludedTags}
-        startDate={startDate}
-        endDate={endDate}
-      />
-      <NotionTable 
-        data={data} 
-        excludedTags={excludedTags}
-        startDate={startDate}
-        endDate={endDate}
-      />
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-4xl font-bold">Personal Finance Dashboard</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('checking')}
+            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
+              activeTab === 'checking'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Checking
+          </button>
+          <button
+            onClick={() => setActiveTab('investments')}
+            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
+              activeTab === 'investments'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Investments
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'checking' && (
+        <>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onDateRangeChange={handleDateRangeChange}
+          />
+          <TagFilterControl
+            availableTags={availableTags}
+            excludedTags={excludedTags}
+            onExcludedTagsChange={setExcludedTags}
+          />
+          <FinancialOverview 
+            data={data} 
+            excludedTags={excludedTags}
+            startDate={startDate}
+            endDate={endDate}
+          />
+          <NotionTable 
+            data={data} 
+            excludedTags={excludedTags}
+            startDate={startDate}
+            endDate={endDate}
+          />
+        </>
+      )}
+
+      {activeTab === 'investments' && (
+        <InvestmentsOverview 
+          positions={trading212Positions}
+          loading={trading212Loading}
+          error={trading212Error}
+        />
+      )}
     </main>
   );
 }
