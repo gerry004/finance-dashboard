@@ -14,4 +14,46 @@ export interface Trading212Data {
   error?: string;
 }
 
+export interface Trading212Fill {
+  filledAt: string;
+  id: number;
+  price: number;
+  quantity: number;
+  tradingMethod: string;
+  type: string;
+  walletImpact?: {
+    currency: string;
+    netValue: number;
+    realisedProfitLoss: number;
+    fxRate: number;
+    taxes: any[];
+  };
+}
+
+export interface Trading212Order {
+  createdAt: string;
+  currency: string;
+  extendedHours: boolean;
+  filledQuantity: number;
+  id: number;
+  initiatedFrom: string;
+  instrument: {
+    ticker: string;
+    name: string;
+    isin: string;
+    currency: string;
+  };
+  quantity: number;
+  side: "BUY" | "SELL";
+  status: string;
+  strategy: string;
+  ticker: string;
+  type: string;
+}
+
+export interface Trading212HistoricalOrder {
+  fill: Trading212Fill;
+  order: Trading212Order;
+}
+
 

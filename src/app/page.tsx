@@ -1,10 +1,11 @@
 'use client';
 
 import { NotionDatabaseData } from "@/types/notion";
-import { Trading212Position } from "@/types/trading212";
+import { Trading212Position, Trading212HistoricalOrder } from "@/types/trading212";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
 import { InvestmentsOverview } from "@/components/InvestmentsOverview";
+import { HistoricalOrdersTable } from "@/components/HistoricalOrdersTable";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -24,6 +25,9 @@ export default function DashboardPage() {
   const [trading212Positions, setTrading212Positions] = useState<Trading212Position[] | null>(null);
   const [trading212Loading, setTrading212Loading] = useState(true);
   const [trading212Error, setTrading212Error] = useState<string | null>(null);
+  const [historicalOrders, setHistoricalOrders] = useState<Trading212HistoricalOrder[] | null>(null);
+  const [historicalOrdersLoading, setHistoricalOrdersLoading] = useState(true);
+  const [historicalOrdersError, setHistoricalOrdersError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
 
   // Check authentication status on mount
@@ -148,6 +152,9 @@ export default function DashboardPage() {
     if (!isAuthenticated) return;
 
     const fetchHistoricalOrders = async () => {
+      setHistoricalOrdersLoading(true);
+      setHistoricalOrdersError(null);
+      
       try {
         const response = await fetch('/api/trading212/historical_orders', { credentials: 'include' });
         
@@ -161,8 +168,26 @@ export default function DashboardPage() {
         
         const ordersData = await response.json();
         console.log('Trading 212 Historical Orders:', ordersData);
+        
+        // Extract orders from the response
+        if (ordersData.data) {
+          if (Array.isArray(ordersData.data)) {
+            setHistoricalOrders(ordersData.data);
+          } else if (ordersData.data.error) {
+            setHistoricalOrdersError(ordersData.data.error);
+          } else {
+            setHistoricalOrders([]);
+          }
+        } else if (ordersData.error) {
+          setHistoricalOrdersError(ordersData.error);
+        } else {
+          setHistoricalOrders([]);
+        }
       } catch (error) {
         console.error('Error fetching Trading 212 historical orders:', error);
+        setHistoricalOrdersError(error instanceof Error ? error.message : 'An error occurred while fetching Trading 212 historical orders');
+      } finally {
+        setHistoricalOrdersLoading(false);
       }
     };
 
@@ -281,11 +306,18 @@ export default function DashboardPage() {
       )}
 
       {activeTab === 'investments' && (
-        <InvestmentsOverview 
-          positions={trading212Positions}
-          loading={trading212Loading}
-          error={trading212Error}
-        />
+        <>
+          <InvestmentsOverview 
+            positions={trading212Positions}
+            loading={trading212Loading}
+            error={trading212Error}
+          />
+          <HistoricalOrdersTable 
+            orders={historicalOrders}
+            loading={historicalOrdersLoading}
+            error={historicalOrdersError}
+          />
+        </>
       )}
     </main>
   );
