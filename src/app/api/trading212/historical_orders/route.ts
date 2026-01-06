@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/utils/auth";
-import { getTrading212Credentials, createTrading212AuthHeader, handleTrading212Error } from "@/utils/trading212";
+import { getTrading212Credentials, createTrading212AuthHeader } from "@/utils/trading212";
+import { handleTrading212Error, parseTrading212Response } from "@/utils/trading212Helpers";
 
 export async function GET() {
-  // Check authentication
-  const authError = await requireAuth();
-  if (authError) return authError;
-
+  // Authentication is handled by middleware
   try {
     const credentials = getTrading212Credentials();
     if (credentials instanceof NextResponse) {
@@ -39,12 +36,10 @@ export async function GET() {
       }
 
       const data = await resp.text();
-      
-      // Parse JSON response
-      let parsedData;
-      try {
-        parsedData = JSON.parse(data);
-      } catch {
+      const parsedData = parseTrading212Response(data);
+
+      // Validate parsed data is an object (not plain text)
+      if (typeof parsedData !== 'object' || parsedData === null) {
         return NextResponse.json(
           { error: "Invalid JSON response from Trading 212 API" },
           { status: 500 }

@@ -3,6 +3,8 @@
 import { NotionDatabaseData } from "@/types/notion";
 import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import { useState } from "react";
+import { NOTION_COLOR_MAP } from "@/utils/constants";
+import { shouldIncludePage } from "@/utils/notionFilters";
 
 interface NotionTableProps {
   data: NotionDatabaseData;
@@ -10,25 +12,6 @@ interface NotionTableProps {
   startDate: string | null;
   endDate: string | null;
 }
-
-const colorMap = {
-  red: "bg-red-100 text-red-800",
-  blue: "bg-blue-100 text-blue-800",
-  green: "bg-green-100 text-green-800",
-  yellow: "bg-yellow-100 text-yellow-800",
-  purple: "bg-purple-100 text-purple-800",
-  pink: "bg-pink-100 text-pink-800",
-  orange: "bg-orange-100 text-orange-800",
-  gray: "bg-gray-100 text-gray-800",
-  brown: "bg-zinc-100 text-zinc-800",
-  lime: "bg-lime-100 text-lime-800",
-  emerald: "bg-emerald-100 text-emerald-800",
-  cyan: "bg-cyan-100 text-cyan-800",
-  violet: "bg-violet-100 text-violet-800",
-  fuchsia: "bg-fuchsia-100 text-fuchsia-800",
-  rose: "bg-rose-100 text-rose-800",
-  default: "bg-gray-100 text-gray-800",
-};
 
 // Add type for sorting
 type SortConfig = {
@@ -47,7 +30,7 @@ function formatProperty(property: any, excludedTags?: Set<string>) {
       return (
         <span
           className={`px-2 py-1 rounded text-sm ${
-            colorMap[property.select?.color as keyof typeof colorMap]
+            NOTION_COLOR_MAP[property.select?.color as keyof typeof NOTION_COLOR_MAP] || NOTION_COLOR_MAP.default
           }`}
         >
           {property.select?.name}
@@ -64,7 +47,7 @@ function formatProperty(property: any, excludedTags?: Set<string>) {
           <span
             key={item.id}
             className={`mr-1 px-2 py-1 rounded text-sm ${
-              colorMap[item.color as keyof typeof colorMap]
+              NOTION_COLOR_MAP[item.color as keyof typeof NOTION_COLOR_MAP] || NOTION_COLOR_MAP.default
             }`}
           >
             {item.name}
@@ -108,27 +91,6 @@ export function NotionTable({ data, excludedTags, startDate, endDate }: NotionTa
     direction: "asc",
   });
 
-  // Helper function to check if a date is within the range
-  const isDateInRange = (dateString: string | null | undefined): boolean => {
-    if (!dateString) return true; // Include if no date property
-    
-    const pageDate = new Date(dateString);
-    
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      return pageDate >= start && pageDate <= end;
-    } else if (startDate) {
-      const start = new Date(startDate);
-      return pageDate >= start;
-    } else if (endDate) {
-      const end = new Date(endDate);
-      return pageDate <= end;
-    }
-    
-    return true; // Include if no date filter is set
-  };
-
   const desiredOrder = ["Description", "Amount", "Type", "Tags", "Created"];
   const columns = Object.entries(data.schema.properties)
     .filter(([_, property]) => {
@@ -151,23 +113,7 @@ export function NotionTable({ data, excludedTags, startDate, endDate }: NotionTa
   const sortedPages = data.pages
     .filter((page) => {
       const typedPage = page as PageObjectResponse;
-      
-      // Filter by date range
-      const createdDate = typedPage.properties['Created']?.type === 'date'
-        ? typedPage.properties['Created'].date?.start
-        : null;
-      
-      if (!isDateInRange(createdDate)) {
-        return false;
-      }
-      
-      // Filter by tags
-      const tags = typedPage.properties['Tags']?.type === 'multi_select'
-        ? typedPage.properties['Tags'].multi_select
-        : [];
-      
-      // Include page if it has no tags or at least one non-excluded tag
-      return tags.length === 0 || tags.some(tag => !excludedTags.has(tag.name));
+      return shouldIncludePage(typedPage, excludedTags, startDate, endDate);
     })
     .sort((a, b) => {
       if (!sortConfig.column) return 0;

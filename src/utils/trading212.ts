@@ -30,14 +30,3 @@ export function createTrading212AuthHeader(credentials: Trading212Credentials): 
   return 'Basic ' + Buffer.from(`${credentials.apiKey}:${credentials.apiSecret}`).toString('base64');
 }
 
-/**
- * Handle Trading212 API error response
- */
-export function handleTrading212Error(resp: Response, errorText: string): NextResponse {
-  console.error('Trading 212 API error:', resp.status, errorText);
-  return NextResponse.json(
-    { error: `Trading 212 API error: ${resp.status}`, details: errorText },
-    { status: resp.status }
-  );
-}
-

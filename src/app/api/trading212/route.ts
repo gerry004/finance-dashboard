@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/utils/auth";
-import { getTrading212Credentials, createTrading212AuthHeader, handleTrading212Error } from "@/utils/trading212";
+import { getTrading212Credentials, createTrading212AuthHeader } from "@/utils/trading212";
+import { handleTrading212Error, parseTrading212Response } from "@/utils/trading212Helpers";
 
 export async function GET() {
-  // Check authentication
-  const authError = await requireAuth();
-  if (authError) return authError;
-
+  // Authentication is handled by middleware
   try {
     const credentials = getTrading212Credentials();
     if (credentials instanceof NextResponse) {
@@ -31,14 +28,7 @@ export async function GET() {
     }
 
     const data = await resp.text();
-    
-    // Try to parse as JSON, but if it fails, return as text
-    let parsedData;
-    try {
-      parsedData = JSON.parse(data);
-    } catch {
-      parsedData = data;
-    }
+    const parsedData = parseTrading212Response(data);
 
     return NextResponse.json({ data: parsedData });
   } catch (error) {

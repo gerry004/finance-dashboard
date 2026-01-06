@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { authenticatedFetch } from '@/utils/apiClient';
 
 interface PasscodePromptProps {
   onAuthenticated: () => void;
@@ -18,11 +17,12 @@ export function PasscodePrompt({ onAuthenticated }: PasscodePromptProps) {
     setLoading(true);
 
     try {
-      const response = await authenticatedFetch('/api/auth/verify', {
+      const response = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ passcode }),
       });
 

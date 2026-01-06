@@ -10,7 +10,7 @@ import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
-import { authenticatedFetch, handleUnauthorized } from "@/utils/apiClient";
+import { handleUnauthorized } from "@/utils/authHelpers";
 import { useEffect, useState, useMemo } from "react";
 
 export default function DashboardPage() {
@@ -27,27 +27,23 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
 
   // Check authentication status on mount
+  // Middleware handles API authentication, but we need to check client-side for UI
   useEffect(() => {
     const checkAuthStatus = async () => {
-      // First check sessionStorage
-      const sessionAuth = sessionStorage.getItem('dashboard_authenticated');
-      if (sessionAuth === 'true') {
-        // Verify with server
-        try {
-          const response = await authenticatedFetch('/api/auth/verify');
-          const data = await response.json();
-          if (data.authenticated) {
-            setIsAuthenticated(true);
-          } else {
-            sessionStorage.removeItem('dashboard_authenticated');
-            setIsAuthenticated(false);
-          }
-        } catch (error) {
-          console.error('Error checking auth:', error);
+      try {
+        const response = await fetch('/api/auth/verify', { credentials: 'include' });
+        const data = await response.json();
+        if (data.authenticated) {
+          setIsAuthenticated(true);
+          sessionStorage.setItem('dashboard_authenticated', 'true');
+        } else {
           setIsAuthenticated(false);
+          sessionStorage.removeItem('dashboard_authenticated');
         }
-      } else {
+      } catch (error) {
+        console.error('Error checking auth:', error);
         setIsAuthenticated(false);
+        sessionStorage.removeItem('dashboard_authenticated');
       }
     };
 
@@ -64,8 +60,9 @@ export default function DashboardPage() {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
+      
       try {
-        const response = await authenticatedFetch('/api/notion');
+        const response = await fetch('/api/notion', { credentials: 'include' });
         
         if (!response.ok) {
           if (handleUnauthorized(response)) {
@@ -74,6 +71,7 @@ export default function DashboardPage() {
           }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const notionData = await response.json();
         setData(notionData);
       } catch (error) {
@@ -94,8 +92,9 @@ export default function DashboardPage() {
     const fetchTrading212Positions = async () => {
       setTrading212Loading(true);
       setTrading212Error(null);
+      
       try {
-        const response = await authenticatedFetch('/api/trading212');
+        const response = await fetch('/api/trading212', { credentials: 'include' });
         
         if (!response.ok) {
           if (handleUnauthorized(response)) {
@@ -104,6 +103,7 @@ export default function DashboardPage() {
           }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const trading212Data = await response.json();
         console.log('Trading 212 Open Positions:', trading212Data);
         
@@ -141,7 +141,7 @@ export default function DashboardPage() {
 
     const fetchHistoricalOrders = async () => {
       try {
-        const response = await authenticatedFetch('/api/trading212/historical_orders');
+        const response = await fetch('/api/trading212/historical_orders', { credentials: 'include' });
         
         if (!response.ok) {
           if (handleUnauthorized(response)) {
@@ -150,6 +150,7 @@ export default function DashboardPage() {
           }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const ordersData = await response.json();
         console.log('Trading 212 Historical Orders:', ordersData);
       } catch (error) {
