@@ -4,8 +4,22 @@ export interface Trading212Position {
   quantity: number;
   currentPrice?: number;
   averagePrice?: number;
+  averagePricePaid?: number;
   price?: number;
   value?: number;
+  instrument?: {
+    ticker: string;
+    name: string;
+    isin: string;
+    currency: string;
+  };
+  walletImpact?: {
+    currency: string;
+    totalCost: number;
+    currentValue: number;
+    unrealizedProfitLoss: number;
+    fxImpact: number;
+  };
   [key: string]: any; // Allow for additional fields
 }
 

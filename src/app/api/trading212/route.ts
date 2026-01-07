@@ -13,7 +13,7 @@ export async function GET() {
     const authHeader = createTrading212AuthHeader(credentials);
 
     const resp = await fetch(
-      'https://live.trading212.com/api/v0/equity/portfolio',
+      'https://live.trading212.com/api/v0/equity/positions',
       {
         method: 'GET',
         headers: {

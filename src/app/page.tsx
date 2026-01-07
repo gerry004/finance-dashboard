@@ -6,6 +6,7 @@ import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
 import { InvestmentsOverview } from "@/components/InvestmentsOverview";
 import { HistoricalOrdersTable } from "@/components/HistoricalOrdersTable";
+import { RealizedProfitLoss } from "@/components/RealizedProfitLoss";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -309,8 +310,15 @@ export default function DashboardPage() {
         <>
           <InvestmentsOverview 
             positions={trading212Positions}
+            orders={historicalOrders}
             loading={trading212Loading}
             error={trading212Error}
+          />
+          <RealizedProfitLoss 
+            orders={historicalOrders}
+            positions={trading212Positions}
+            loading={historicalOrdersLoading || trading212Loading}
+            error={historicalOrdersError || trading212Error}
           />
           <HistoricalOrdersTable 
             orders={historicalOrders}

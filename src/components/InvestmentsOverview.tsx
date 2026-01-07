@@ -1,10 +1,11 @@
 "use client";
 
-import { Trading212Position } from "@/types/trading212";
+import { Trading212Position, Trading212HistoricalOrder } from "@/types/trading212";
 import { useMemo } from "react";
 
 interface InvestmentsOverviewProps {
   positions: Trading212Position[] | null;
+  orders?: Trading212HistoricalOrder[] | null;
   loading?: boolean;
   error?: string | null;
 }
@@ -14,17 +15,65 @@ interface ProcessedPosition {
   quantity: number;
   currentPrice: number;
   value: number;
+  costBasis: number;
+  unrealizedProfitLoss: number;
+  percentageChange: number;
+  currency: string; // Currency for value (from walletImpact)
+  instrumentCurrency: string; // Currency for current price (from instrument)
 }
 
-export function InvestmentsOverview({ positions, loading, error }: InvestmentsOverviewProps) {
+export function InvestmentsOverview({ positions, orders, loading, error }: InvestmentsOverviewProps) {
+  // Calculate cost basis from historical orders for each ticker
+  // Cost basis = Total Buys - Total Sells (net investment in current position)
+  const costBasisByTicker = useMemo(() => {
+    if (!orders || !Array.isArray(orders)) return new Map<string, { costBasis: number; currency: string }>();
+
+    const tickerMap = new Map<string, { costBasis: number; currency: string }>();
+
+    orders
+      .filter((orderItem) => {
+        // Only include filled orders with walletImpact
+        return (
+          orderItem.order?.status === "FILLED" &&
+          orderItem.fill?.walletImpact
+        );
+      })
+      .forEach((orderItem) => {
+        const ticker = orderItem.order.instrument?.ticker || orderItem.order.ticker || "N/A";
+        if (ticker === "N/A") return;
+
+        const walletImpact = orderItem.fill!.walletImpact!;
+        const netValue = walletImpact.netValue;
+        const currency = walletImpact.currency;
+        const side = orderItem.order.side;
+
+        if (!tickerMap.has(ticker)) {
+          tickerMap.set(ticker, { costBasis: 0, currency });
+        }
+
+        const tickerData = tickerMap.get(ticker)!;
+        
+        if (side === "BUY") {
+          // BUY orders have negative netValue (money out), so we add the absolute value
+          tickerData.costBasis += Math.abs(netValue);
+        } else if (side === "SELL") {
+          // SELL orders have positive netValue (money in), so we subtract it
+          // This gives us the net cost basis of what we currently own
+          tickerData.costBasis -= netValue;
+        }
+      });
+
+    return tickerMap;
+  }, [orders]);
+
   // Process positions to extract and calculate values
   const processedPositions = useMemo(() => {
     if (!positions || !Array.isArray(positions)) return [];
 
     return positions
       .map((position): ProcessedPosition | null => {
-        // Extract ticker (handle different field names)
-        const ticker = position.ticker || position.tickerSymbol || 'N/A';
+        // Extract ticker from instrument.ticker (new structure)
+        const ticker = position.instrument?.ticker || position.ticker || position.tickerSymbol || 'N/A';
         
         // Extract quantity
         const quantity = position.quantity || 0;
@@ -32,18 +81,45 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
         // Extract current price (handle different field names)
         const currentPrice = position.currentPrice || position.price || position.averagePrice || 0;
         
-        // Calculate value if not provided
-        const value = position.value !== undefined 
-          ? position.value 
-          : currentPrice * quantity;
+        // Get current value from walletImpact.currentValue (new structure)
+        const value = position.walletImpact?.currentValue !== undefined
+          ? position.walletImpact.currentValue
+          : position.value !== undefined 
+            ? position.value 
+            : currentPrice * quantity;
+
+        // Get currency from walletImpact.currency (for value display)
+        const currency = position.walletImpact?.currency || position.instrument?.currency || "USD";
+        
+        // Get instrument currency (for current price display)
+        const instrumentCurrency = position.instrument?.currency || "USD";
+
+        // Get cost basis from historical orders
+        const costBasisData = costBasisByTicker.get(ticker);
+        const costBasis = costBasisData?.costBasis || 0;
+
+        // Use unrealizedProfitLoss from walletImpact if available, otherwise calculate
+        const unrealizedProfitLoss = position.walletImpact?.unrealizedProfitLoss !== undefined
+          ? position.walletImpact.unrealizedProfitLoss
+          : value - costBasis;
+
+        // Calculate percentage change: (unrealizedProfitLoss / costBasis) * 100
+        const percentageChange = costBasis > 0 
+          ? (unrealizedProfitLoss / costBasis) * 100 
+          : 0;
 
         // Only include positions with valid data
-        if (quantity > 0 && currentPrice > 0) {
+        if (quantity > 0 && (currentPrice > 0 || value > 0)) {
           return {
             ticker,
             quantity,
             currentPrice,
             value,
+            costBasis,
+            unrealizedProfitLoss,
+            percentageChange,
+            currency,
+            instrumentCurrency,
           };
         }
         
@@ -51,12 +127,42 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
       })
       .filter((pos): pos is ProcessedPosition => pos !== null)
       .sort((a, b) => b.value - a.value); // Sort by value descending
-  }, [positions]);
+  }, [positions, costBasisByTicker]);
 
-  // Calculate total portfolio value
+  // Calculate total portfolio value and cost basis
   const totalPortfolioValue = useMemo(() => {
     return processedPositions.reduce((sum, position) => sum + position.value, 0);
   }, [processedPositions]);
+
+  const totalCostBasis = useMemo(() => {
+    return processedPositions.reduce((sum, position) => sum + position.costBasis, 0);
+  }, [processedPositions]);
+
+  const totalUnrealizedPL = useMemo(() => {
+    return processedPositions.reduce((sum, position) => sum + position.unrealizedProfitLoss, 0);
+  }, [processedPositions]);
+
+  // Calculate total percentage change (weighted average)
+  const totalPercentageChange = useMemo(() => {
+    const totalCostBasis = processedPositions.reduce((sum, position) => sum + position.costBasis, 0);
+    if (totalCostBasis === 0) return 0;
+    return (totalUnrealizedPL / totalCostBasis) * 100;
+  }, [processedPositions, totalUnrealizedPL]);
+
+  // Get the most common currency (or default to USD)
+  const defaultCurrency = useMemo(() => {
+    if (processedPositions.length === 0) return "USD";
+    const currencies = processedPositions.map((p) => p.currency);
+    const counts = currencies.reduce((acc, curr) => {
+      acc[curr] = (acc[curr] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "USD";
+  }, [processedPositions]);
+
+  const formatPercentage = (value: number) => {
+    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+  };
 
   if (loading) {
     return (
@@ -91,10 +197,10 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
     );
   }
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number, currency: string = "USD") => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
@@ -106,12 +212,40 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
 
   return (
     <div className="space-y-6 mb-8">
-      {/* Total Portfolio Value */}
-      <div className="p-4 bg-indigo-100 rounded-lg">
-        <h3 className="text-lg font-semibold text-indigo-800 mb-2">Total Investment Portfolio Value</h3>
-        <p className="text-3xl font-bold text-indigo-900">
-          {formatCurrency(totalPortfolioValue)}
-        </p>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 bg-indigo-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-indigo-800 mb-2">Total Portfolio Value</h3>
+          <p className="text-3xl font-bold text-indigo-900">
+            {formatCurrency(totalPortfolioValue, defaultCurrency)}
+          </p>
+        </div>
+        <div className="p-4 bg-blue-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">Total Cost Basis</h3>
+          <p className="text-3xl font-bold text-blue-900">
+            {formatCurrency(totalCostBasis, defaultCurrency)}
+          </p>
+        </div>
+        <div className={`p-4 rounded-lg ${
+          totalUnrealizedPL >= 0 
+            ? "bg-green-100" 
+            : "bg-red-100"
+        }`}>
+          <h3 className={`text-lg font-semibold mb-2 ${
+            totalUnrealizedPL >= 0 
+              ? "text-green-800" 
+              : "text-red-800"
+          }`}>
+            Total Unrealized P/L
+          </h3>
+          <p className={`text-3xl font-bold ${
+            totalUnrealizedPL >= 0 
+              ? "text-green-900" 
+              : "text-red-900"
+          }`}>
+            {formatCurrency(totalUnrealizedPL, defaultCurrency)}
+          </p>
+        </div>
       </div>
 
       {/* Positions Table */}
@@ -124,7 +258,10 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
                 <th className="p-3 text-left border font-semibold">Ticker</th>
                 <th className="p-3 text-right border font-semibold">Quantity</th>
                 <th className="p-3 text-right border font-semibold">Current Price</th>
-                <th className="p-3 text-right border font-semibold">Value</th>
+                <th className="p-3 text-right border font-semibold">Cost Basis</th>
+                <th className="p-3 text-right border font-semibold">Current Value</th>
+                <th className="p-3 text-right border font-semibold">Unrealized P/L</th>
+                <th className="p-3 text-right border font-semibold">% Change</th>
               </tr>
             </thead>
             <tbody>
@@ -132,8 +269,36 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
                 <tr key={`${position.ticker}-${index}`} className="border-b hover:bg-gray-50">
                   <td className="p-3 border font-medium">{position.ticker}</td>
                   <td className="p-3 border text-right">{formatNumber(position.quantity, 4)}</td>
-                  <td className="p-3 border text-right">{formatCurrency(position.currentPrice)}</td>
-                  <td className="p-3 border text-right font-semibold">{formatCurrency(position.value)}</td>
+                  <td className="p-3 border text-right">{formatCurrency(position.currentPrice, position.instrumentCurrency)}</td>
+                  <td className="p-3 border text-right">
+                    {position.costBasis > 0 
+                      ? formatCurrency(position.costBasis, position.currency)
+                      : <span className="text-gray-400">N/A</span>
+                    }
+                  </td>
+                  <td className="p-3 border text-right font-semibold">
+                    {formatCurrency(position.value, position.currency)}
+                  </td>
+                  <td className={`p-3 border text-right font-semibold ${
+                    position.unrealizedProfitLoss >= 0 
+                      ? "text-green-600" 
+                      : "text-red-600"
+                  }`}>
+                    {position.costBasis > 0 
+                      ? formatCurrency(position.unrealizedProfitLoss, position.currency)
+                      : <span className="text-gray-400">N/A</span>
+                    }
+                  </td>
+                  <td className={`p-3 border text-right font-semibold ${
+                    position.percentageChange >= 0 
+                      ? "text-green-600" 
+                      : "text-red-600"
+                  }`}>
+                    {position.costBasis > 0 
+                      ? formatPercentage(position.percentageChange)
+                      : <span className="text-gray-400">N/A</span>
+                    }
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -142,7 +307,22 @@ export function InvestmentsOverview({ positions, loading, error }: InvestmentsOv
                 <td className="p-3 border">Total</td>
                 <td className="p-3 border text-right"></td>
                 <td className="p-3 border text-right"></td>
-                <td className="p-3 border text-right">{formatCurrency(totalPortfolioValue)}</td>
+                <td className="p-3 border text-right">
+                  {formatCurrency(totalCostBasis, defaultCurrency)}
+                </td>
+                <td className="p-3 border text-right">
+                  {formatCurrency(totalPortfolioValue, defaultCurrency)}
+                </td>
+                <td className={`p-3 border text-right ${
+                  totalUnrealizedPL >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {formatCurrency(totalUnrealizedPL, defaultCurrency)}
+                </td>
+                <td className={`p-3 border text-right ${
+                  totalPercentageChange >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {formatPercentage(totalPercentageChange)}
+                </td>
               </tr>
             </tfoot>
           </table>
