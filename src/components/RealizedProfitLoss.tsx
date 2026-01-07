@@ -1,7 +1,7 @@
 "use client";
 
 import { Trading212HistoricalOrder, Trading212Position, Trading212Dividend } from "@/types/trading212";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 
 interface RealizedProfitLossProps {
   orders: Trading212HistoricalOrder[] | null;
@@ -21,7 +21,30 @@ interface ClosedPosition {
   currency: string;
 }
 
+type SortConfig = {
+  column: keyof ClosedPosition | null;
+  direction: "asc" | "desc";
+};
+
+function compareValues(a: any, b: any, direction: "asc" | "desc") {
+  if (a === b) return 0;
+  if (a === null || a === undefined) return direction === "asc" ? -1 : 1;
+  if (b === null || b === undefined) return direction === "asc" ? 1 : -1;
+
+  if (typeof a === "string" && typeof b === "string") {
+    return direction === "asc" 
+      ? a.localeCompare(b)
+      : b.localeCompare(a);
+  }
+
+  return direction === "asc" ? (a < b ? -1 : 1) : a < b ? 1 : -1;
+}
+
 export function RealizedProfitLoss({ orders, positions, dividends, loading, error }: RealizedProfitLossProps) {
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    column: null,
+    direction: "asc",
+  });
   // Log dividends when they change
   useEffect(() => {
     if (dividends) {
@@ -117,9 +140,32 @@ export function RealizedProfitLoss({ orders, positions, dividends, loading, erro
       }
     });
 
-    // Sort by realized profit/loss (best performers first)
-    return closed.sort((a, b) => b.realizedProfitLoss - a.realizedProfitLoss);
+    return closed;
   }, [orders, openTickers, dividendsByTicker]);
+
+  // Sort closed positions based on sortConfig
+  const sortedClosedPositions = useMemo(() => {
+    if (!sortConfig.column) {
+      // Default sort by realized profit/loss (best performers first)
+      return [...closedPositions].sort((a, b) => b.realizedProfitLoss - a.realizedProfitLoss);
+    }
+
+    return [...closedPositions].sort((a, b) => {
+      const valueA = a[sortConfig.column!];
+      const valueB = b[sortConfig.column!];
+      return compareValues(valueA, valueB, sortConfig.direction);
+    });
+  }, [closedPositions, sortConfig]);
+
+  const handleSort = (column: keyof ClosedPosition) => {
+    setSortConfig((current) => ({
+      column,
+      direction:
+        current.column === column && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  };
 
   const formatCurrency = (value: number, currency: string = "USD") => {
     return new Intl.NumberFormat("en-US", {
@@ -239,16 +285,88 @@ export function RealizedProfitLoss({ orders, positions, dividends, loading, erro
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
-                <th className="p-3 text-left border font-semibold">Ticker</th>
-                <th className="p-3 text-right border font-semibold">Total Buys</th>
-                <th className="p-3 text-right border font-semibold">Total Sells</th>
-                <th className="p-3 text-right border font-semibold">Dividends</th>
-                <th className="p-3 text-right border font-semibold">Realized P/L</th>
-                <th className="p-3 text-right border font-semibold">% Change</th>
+                <th 
+                  className="p-3 text-left border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("ticker")}
+                >
+                  <div className="flex items-center">
+                    Ticker
+                    {sortConfig.column === "ticker" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("totalBuys")}
+                >
+                  <div className="flex items-center justify-end">
+                    Total Buys
+                    {sortConfig.column === "totalBuys" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("totalSells")}
+                >
+                  <div className="flex items-center justify-end">
+                    Total Sells
+                    {sortConfig.column === "totalSells" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("dividends")}
+                >
+                  <div className="flex items-center justify-end">
+                    Dividends
+                    {sortConfig.column === "dividends" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("realizedProfitLoss")}
+                >
+                  <div className="flex items-center justify-end">
+                    Realized P/L
+                    {sortConfig.column === "realizedProfitLoss" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("percentageChange")}
+                >
+                  <div className="flex items-center justify-end">
+                    % Change
+                    {sortConfig.column === "percentageChange" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {closedPositions.map((position, index) => (
+              {sortedClosedPositions.map((position, index) => (
                 <tr key={`${position.ticker}-${index}`} className="border-b hover:bg-gray-50">
                   <td className="p-3 border font-medium">{position.ticker}</td>
                   <td className="p-3 border text-right">
@@ -282,13 +400,13 @@ export function RealizedProfitLoss({ orders, positions, dividends, loading, erro
                 <td className="p-3 border">Total</td>
                 <td className="p-3 border text-right">
                   {formatCurrency(
-                    closedPositions.reduce((sum, p) => sum + p.totalBuys, 0),
+                    sortedClosedPositions.reduce((sum, p) => sum + p.totalBuys, 0),
                     defaultCurrency
                   )}
                 </td>
                 <td className="p-3 border text-right">
                   {formatCurrency(
-                    closedPositions.reduce((sum, p) => sum + p.totalSells, 0),
+                    sortedClosedPositions.reduce((sum, p) => sum + p.totalSells, 0),
                     defaultCurrency
                   )}
                 </td>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Trading212Position, Trading212HistoricalOrder, Trading212Dividend } from "@/types/trading212";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface InvestmentsOverviewProps {
   positions: Trading212Position[] | null;
@@ -24,7 +24,30 @@ interface ProcessedPosition {
   instrumentCurrency: string; // Currency for current price (from instrument)
 }
 
+type SortConfig = {
+  column: keyof ProcessedPosition | null;
+  direction: "asc" | "desc";
+};
+
+function compareValues(a: any, b: any, direction: "asc" | "desc") {
+  if (a === b) return 0;
+  if (a === null || a === undefined) return direction === "asc" ? -1 : 1;
+  if (b === null || b === undefined) return direction === "asc" ? 1 : -1;
+
+  if (typeof a === "string" && typeof b === "string") {
+    return direction === "asc" 
+      ? a.localeCompare(b)
+      : b.localeCompare(a);
+  }
+
+  return direction === "asc" ? (a < b ? -1 : 1) : a < b ? 1 : -1;
+}
+
 export function InvestmentsOverview({ positions, orders, dividends, loading, error }: InvestmentsOverviewProps) {
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    column: null,
+    direction: "asc",
+  });
   // Aggregate dividends by ticker using amountInEuro
   const dividendsByTicker = useMemo(() => {
     if (!dividends || !Array.isArray(dividends)) return new Map<string, number>();
@@ -148,44 +171,67 @@ export function InvestmentsOverview({ positions, orders, dividends, loading, err
         
         return null;
       })
-      .filter((pos): pos is ProcessedPosition => pos !== null)
-      .sort((a, b) => b.value - a.value); // Sort by value descending
+      .filter((pos): pos is ProcessedPosition => pos !== null);
   }, [positions, costBasisByTicker, dividendsByTicker]);
+
+  // Sort processed positions based on sortConfig
+  const sortedProcessedPositions = useMemo(() => {
+    if (!sortConfig.column) {
+      // Default sort by value descending
+      return [...processedPositions].sort((a, b) => b.value - a.value);
+    }
+
+    return [...processedPositions].sort((a, b) => {
+      const valueA = a[sortConfig.column!];
+      const valueB = b[sortConfig.column!];
+      return compareValues(valueA, valueB, sortConfig.direction);
+    });
+  }, [processedPositions, sortConfig]);
+
+  const handleSort = (column: keyof ProcessedPosition) => {
+    setSortConfig((current) => ({
+      column,
+      direction:
+        current.column === column && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  };
 
   // Calculate total portfolio value and cost basis
   const totalPortfolioValue = useMemo(() => {
-    return processedPositions.reduce((sum, position) => sum + position.value, 0);
-  }, [processedPositions]);
+    return sortedProcessedPositions.reduce((sum, position) => sum + position.value, 0);
+  }, [sortedProcessedPositions]);
 
   const totalCostBasis = useMemo(() => {
-    return processedPositions.reduce((sum, position) => sum + position.costBasis, 0);
-  }, [processedPositions]);
+    return sortedProcessedPositions.reduce((sum: number, position: ProcessedPosition) => sum + position.costBasis, 0);
+  }, [sortedProcessedPositions]);
 
   const totalUnrealizedPL = useMemo(() => {
-    return processedPositions.reduce((sum, position) => sum + position.unrealizedProfitLoss, 0);
-  }, [processedPositions]);
+    return sortedProcessedPositions.reduce((sum: number, position: ProcessedPosition) => sum + position.unrealizedProfitLoss, 0);
+  }, [sortedProcessedPositions]);
 
   const totalDividends = useMemo(() => {
-    return processedPositions.reduce((sum, position) => sum + position.dividends, 0);
-  }, [processedPositions]);
+    return sortedProcessedPositions.reduce((sum: number, position: ProcessedPosition) => sum + position.dividends, 0);
+  }, [sortedProcessedPositions]);
 
   // Calculate total percentage change (weighted average)
   const totalPercentageChange = useMemo(() => {
-    const totalCostBasis = processedPositions.reduce((sum, position) => sum + position.costBasis, 0);
+    const totalCostBasis = sortedProcessedPositions.reduce((sum: number, position: ProcessedPosition) => sum + position.costBasis, 0);
     if (totalCostBasis === 0) return 0;
     return (totalUnrealizedPL / totalCostBasis) * 100;
-  }, [processedPositions, totalUnrealizedPL]);
+  }, [sortedProcessedPositions, totalUnrealizedPL]);
 
   // Get the most common currency (or default to USD)
   const defaultCurrency = useMemo(() => {
-    if (processedPositions.length === 0) return "USD";
-    const currencies = processedPositions.map((p) => p.currency);
-    const counts = currencies.reduce((acc, curr) => {
+    if (sortedProcessedPositions.length === 0) return "USD";
+    const currencies = sortedProcessedPositions.map((p: ProcessedPosition) => p.currency);
+    const counts = currencies.reduce((acc: Record<string, number>, curr: string) => {
       acc[curr] = (acc[curr] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "USD";
-  }, [processedPositions]);
+  }, [sortedProcessedPositions]);
 
   const formatPercentage = (value: number) => {
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
@@ -288,18 +334,114 @@ export function InvestmentsOverview({ positions, orders, dividends, loading, err
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-100">
-                <th className="p-3 text-left border font-semibold">Ticker</th>
-                <th className="p-3 text-right border font-semibold">Quantity</th>
-                <th className="p-3 text-right border font-semibold">Current Price</th>
-                <th className="p-3 text-right border font-semibold">Cost Basis</th>
-                <th className="p-3 text-right border font-semibold">Current Value</th>
-                <th className="p-3 text-right border font-semibold">Dividends</th>
-                <th className="p-3 text-right border font-semibold">Unrealized P/L</th>
-                <th className="p-3 text-right border font-semibold">% Change</th>
+                <th 
+                  className="p-3 text-left border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("ticker")}
+                >
+                  <div className="flex items-center">
+                    Ticker
+                    {sortConfig.column === "ticker" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("quantity")}
+                >
+                  <div className="flex items-center justify-end">
+                    Quantity
+                    {sortConfig.column === "quantity" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("currentPrice")}
+                >
+                  <div className="flex items-center justify-end">
+                    Current Price
+                    {sortConfig.column === "currentPrice" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("costBasis")}
+                >
+                  <div className="flex items-center justify-end">
+                    Cost Basis
+                    {sortConfig.column === "costBasis" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("value")}
+                >
+                  <div className="flex items-center justify-end">
+                    Current Value
+                    {sortConfig.column === "value" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("dividends")}
+                >
+                  <div className="flex items-center justify-end">
+                    Dividends
+                    {sortConfig.column === "dividends" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("unrealizedProfitLoss")}
+                >
+                  <div className="flex items-center justify-end">
+                    Unrealized P/L
+                    {sortConfig.column === "unrealizedProfitLoss" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="p-3 text-right border font-semibold cursor-pointer hover:bg-gray-200"
+                  onClick={() => handleSort("percentageChange")}
+                >
+                  <div className="flex items-center justify-end">
+                    % Change
+                    {sortConfig.column === "percentageChange" && (
+                      <span className="ml-1">
+                        {sortConfig.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {processedPositions.map((position, index) => (
+              {sortedProcessedPositions.map((position, index) => (
                 <tr key={`${position.ticker}-${index}`} className="border-b hover:bg-gray-50">
                   <td className="p-3 border font-medium">{position.ticker}</td>
                   <td className="p-3 border text-right">{formatNumber(position.quantity, 4)}</td>
