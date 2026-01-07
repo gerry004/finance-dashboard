@@ -1,11 +1,12 @@
 "use client";
 
-import { Trading212Position, Trading212HistoricalOrder } from "@/types/trading212";
+import { Trading212Position, Trading212HistoricalOrder, Trading212Dividend } from "@/types/trading212";
 import { useMemo } from "react";
 
 interface InvestmentsOverviewProps {
   positions: Trading212Position[] | null;
   orders?: Trading212HistoricalOrder[] | null;
+  dividends?: Trading212Dividend[] | null;
   loading?: boolean;
   error?: string | null;
 }
@@ -16,13 +17,31 @@ interface ProcessedPosition {
   currentPrice: number;
   value: number;
   costBasis: number;
+  dividends: number;
   unrealizedProfitLoss: number;
   percentageChange: number;
   currency: string; // Currency for value (from walletImpact)
   instrumentCurrency: string; // Currency for current price (from instrument)
 }
 
-export function InvestmentsOverview({ positions, orders, loading, error }: InvestmentsOverviewProps) {
+export function InvestmentsOverview({ positions, orders, dividends, loading, error }: InvestmentsOverviewProps) {
+  // Aggregate dividends by ticker using amountInEuro
+  const dividendsByTicker = useMemo(() => {
+    if (!dividends || !Array.isArray(dividends)) return new Map<string, number>();
+
+    const dividendMap = new Map<string, number>();
+    
+    dividends.forEach((dividend) => {
+      const ticker = dividend.ticker || dividend.instrument?.ticker || "N/A";
+      if (ticker === "N/A") return;
+      
+      const currentTotal = dividendMap.get(ticker) || 0;
+      dividendMap.set(ticker, currentTotal + dividend.amountInEuro);
+    });
+
+    return dividendMap;
+  }, [dividends]);
+
   // Calculate cost basis from historical orders for each ticker
   // Cost basis = Total Buys - Total Sells (net investment in current position)
   const costBasisByTicker = useMemo(() => {
@@ -98,6 +117,9 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
         const costBasisData = costBasisByTicker.get(ticker);
         const costBasis = costBasisData?.costBasis || 0;
 
+        // Get dividends for this ticker
+        const dividends = dividendsByTicker.get(ticker) || 0;
+
         // Use unrealizedProfitLoss from walletImpact if available, otherwise calculate
         const unrealizedProfitLoss = position.walletImpact?.unrealizedProfitLoss !== undefined
           ? position.walletImpact.unrealizedProfitLoss
@@ -116,6 +138,7 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
             currentPrice,
             value,
             costBasis,
+            dividends,
             unrealizedProfitLoss,
             percentageChange,
             currency,
@@ -127,7 +150,7 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
       })
       .filter((pos): pos is ProcessedPosition => pos !== null)
       .sort((a, b) => b.value - a.value); // Sort by value descending
-  }, [positions, costBasisByTicker]);
+  }, [positions, costBasisByTicker, dividendsByTicker]);
 
   // Calculate total portfolio value and cost basis
   const totalPortfolioValue = useMemo(() => {
@@ -140,6 +163,10 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
 
   const totalUnrealizedPL = useMemo(() => {
     return processedPositions.reduce((sum, position) => sum + position.unrealizedProfitLoss, 0);
+  }, [processedPositions]);
+
+  const totalDividends = useMemo(() => {
+    return processedPositions.reduce((sum, position) => sum + position.dividends, 0);
   }, [processedPositions]);
 
   // Calculate total percentage change (weighted average)
@@ -213,16 +240,16 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
   return (
     <div className="space-y-6 mb-8">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 bg-indigo-100 rounded-lg">
-          <h3 className="text-lg font-semibold text-indigo-800 mb-2">Total Portfolio Value</h3>
-          <p className="text-3xl font-bold text-indigo-900">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 bg-purple-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-purple-800 mb-2">Total Portfolio Value</h3>
+          <p className="text-3xl font-bold text-purple-900">
             {formatCurrency(totalPortfolioValue, defaultCurrency)}
           </p>
         </div>
-        <div className="p-4 bg-blue-100 rounded-lg">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">Total Cost Basis</h3>
-          <p className="text-3xl font-bold text-blue-900">
+        <div className="p-4 bg-orange-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-orange-800 mb-2">Total Cost Basis</h3>
+          <p className="text-3xl font-bold text-orange-900">
             {formatCurrency(totalCostBasis, defaultCurrency)}
           </p>
         </div>
@@ -246,6 +273,12 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
             {formatCurrency(totalUnrealizedPL, defaultCurrency)}
           </p>
         </div>
+        <div className="p-4 bg-blue-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-800 mb-2">Total Dividends Received</h3>
+          <p className="text-3xl font-bold text-blue-900">
+            {formatCurrency(totalDividends, "EUR")}
+          </p>
+        </div>
       </div>
 
       {/* Positions Table */}
@@ -260,6 +293,7 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
                 <th className="p-3 text-right border font-semibold">Current Price</th>
                 <th className="p-3 text-right border font-semibold">Cost Basis</th>
                 <th className="p-3 text-right border font-semibold">Current Value</th>
+                <th className="p-3 text-right border font-semibold">Dividends</th>
                 <th className="p-3 text-right border font-semibold">Unrealized P/L</th>
                 <th className="p-3 text-right border font-semibold">% Change</th>
               </tr>
@@ -270,14 +304,17 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
                   <td className="p-3 border font-medium">{position.ticker}</td>
                   <td className="p-3 border text-right">{formatNumber(position.quantity, 4)}</td>
                   <td className="p-3 border text-right">{formatCurrency(position.currentPrice, position.instrumentCurrency)}</td>
-                  <td className="p-3 border text-right">
+                  <td className="p-3 border text-right text-orange-600">
                     {position.costBasis > 0 
                       ? formatCurrency(position.costBasis, position.currency)
                       : <span className="text-gray-400">N/A</span>
                     }
                   </td>
-                  <td className="p-3 border text-right font-semibold">
+                  <td className="p-3 border text-right font-semibold text-purple-600">
                     {formatCurrency(position.value, position.currency)}
+                  </td>
+                  <td className="p-3 border text-right text-blue-600">
+                    {formatCurrency(position.dividends, "EUR")}
                   </td>
                   <td className={`p-3 border text-right font-semibold ${
                     position.unrealizedProfitLoss >= 0 
@@ -307,11 +344,14 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
                 <td className="p-3 border">Total</td>
                 <td className="p-3 border text-right"></td>
                 <td className="p-3 border text-right"></td>
-                <td className="p-3 border text-right">
+                <td className="p-3 border text-right text-orange-600">
                   {formatCurrency(totalCostBasis, defaultCurrency)}
                 </td>
-                <td className="p-3 border text-right">
+                <td className="p-3 border text-right text-purple-600">
                   {formatCurrency(totalPortfolioValue, defaultCurrency)}
+                </td>
+                <td className="p-3 border text-right text-blue-600">
+                  {formatCurrency(totalDividends, "EUR")}
                 </td>
                 <td className={`p-3 border text-right ${
                   totalUnrealizedPL >= 0 ? "text-green-600" : "text-red-600"

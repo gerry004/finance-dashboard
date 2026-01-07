@@ -1,11 +1,12 @@
 "use client";
 
-import { Trading212HistoricalOrder, Trading212Position } from "@/types/trading212";
-import { useMemo } from "react";
+import { Trading212HistoricalOrder, Trading212Position, Trading212Dividend } from "@/types/trading212";
+import { useMemo, useEffect } from "react";
 
 interface RealizedProfitLossProps {
   orders: Trading212HistoricalOrder[] | null;
   positions: Trading212Position[] | null;
+  dividends?: Trading212Dividend[] | null;
   loading?: boolean;
   error?: string | null;
 }
@@ -14,12 +15,20 @@ interface ClosedPosition {
   ticker: string;
   totalBuys: number;
   totalSells: number;
+  dividends: number;
   realizedProfitLoss: number;
   percentageChange: number;
   currency: string;
 }
 
-export function RealizedProfitLoss({ orders, positions, loading, error }: RealizedProfitLossProps) {
+export function RealizedProfitLoss({ orders, positions, dividends, loading, error }: RealizedProfitLossProps) {
+  // Log dividends when they change
+  useEffect(() => {
+    if (dividends) {
+      console.log('Historical Dividends:', dividends);
+    }
+  }, [dividends]);
+
   // Get set of tickers that are currently open
   const openTickers = useMemo(() => {
     if (!positions || !Array.isArray(positions)) return new Set<string>();
@@ -30,6 +39,23 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
         .filter((ticker) => ticker && ticker !== "N/A")
     );
   }, [positions]);
+
+  // Aggregate dividends by ticker using amountInEuro
+  const dividendsByTicker = useMemo(() => {
+    if (!dividends || !Array.isArray(dividends)) return new Map<string, number>();
+
+    const dividendMap = new Map<string, number>();
+    
+    dividends.forEach((dividend) => {
+      const ticker = dividend.ticker || dividend.instrument?.ticker || "N/A";
+      if (ticker === "N/A") return;
+      
+      const currentTotal = dividendMap.get(ticker) || 0;
+      dividendMap.set(ticker, currentTotal + dividend.amountInEuro);
+    });
+
+    return dividendMap;
+  }, [dividends]);
 
   // Process orders to calculate realized P/L for closed positions
   const closedPositions = useMemo(() => {
@@ -73,6 +99,7 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
     tickerMap.forEach((data, ticker) => {
       // Only include tickers that are NOT in open positions
       if (!openTickers.has(ticker) && (data.buys > 0 || data.sells > 0)) {
+        const dividends = dividendsByTicker.get(ticker) || 0;
         const realizedProfitLoss = data.sells - data.buys;
         // Calculate percentage change: (Realized P/L / Total Buys) * 100
         const percentageChange = data.buys > 0 
@@ -82,6 +109,7 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
           ticker,
           totalBuys: data.buys,
           totalSells: data.sells,
+          dividends,
           realizedProfitLoss,
           percentageChange,
           currency: data.currency,
@@ -91,7 +119,7 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
 
     // Sort by realized profit/loss (best performers first)
     return closed.sort((a, b) => b.realizedProfitLoss - a.realizedProfitLoss);
-  }, [orders, openTickers]);
+  }, [orders, openTickers, dividendsByTicker]);
 
   const formatCurrency = (value: number, currency: string = "USD") => {
     return new Intl.NumberFormat("en-US", {
@@ -101,6 +129,11 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
       maximumFractionDigits: 2,
     }).format(value);
   };
+
+  // Calculate total dividends
+  const totalDividends = useMemo(() => {
+    return closedPositions.reduce((sum, pos) => sum + pos.dividends, 0);
+  }, [closedPositions]);
 
   // Calculate total realized P/L
   const totalRealizedPL = useMemo(() => {
@@ -164,26 +197,39 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
 
   return (
     <div className="space-y-6 mb-8">
-      {/* Total Realized P/L Summary */}
-      <div className={`p-4 rounded-lg ${
-        totalRealizedPL >= 0 
-          ? "bg-green-100" 
-          : "bg-red-100"
-      }`}>
-        <h3 className={`text-lg font-semibold mb-2 ${
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Total Realized P/L Summary */}
+        <div className={`p-4 rounded-lg ${
           totalRealizedPL >= 0 
-            ? "text-green-800" 
-            : "text-red-800"
+            ? "bg-green-100" 
+            : "bg-red-100"
         }`}>
-          Total Realized Profit/Loss
-        </h3>
-        <p className={`text-3xl font-bold ${
-          totalRealizedPL >= 0 
-            ? "text-green-900" 
-            : "text-red-900"
-        }`}>
-          {formatCurrency(totalRealizedPL, defaultCurrency)}
-        </p>
+          <h3 className={`text-lg font-semibold mb-2 ${
+            totalRealizedPL >= 0 
+              ? "text-green-800" 
+              : "text-red-800"
+          }`}>
+            Total Realized Profit/Loss
+          </h3>
+          <p className={`text-3xl font-bold ${
+            totalRealizedPL >= 0 
+              ? "text-green-900" 
+              : "text-red-900"
+          }`}>
+            {formatCurrency(totalRealizedPL, defaultCurrency)}
+          </p>
+        </div>
+
+        {/* Total Dividends Received Summary */}
+        <div className="p-4 rounded-lg bg-blue-100">
+          <h3 className="text-lg font-semibold mb-2 text-blue-800">
+            Total Dividends Received
+          </h3>
+          <p className="text-3xl font-bold text-blue-900">
+            {formatCurrency(totalDividends, "EUR")}
+          </p>
+        </div>
       </div>
 
       {/* Closed Positions Table */}
@@ -196,6 +242,7 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
                 <th className="p-3 text-left border font-semibold">Ticker</th>
                 <th className="p-3 text-right border font-semibold">Total Buys</th>
                 <th className="p-3 text-right border font-semibold">Total Sells</th>
+                <th className="p-3 text-right border font-semibold">Dividends</th>
                 <th className="p-3 text-right border font-semibold">Realized P/L</th>
                 <th className="p-3 text-right border font-semibold">% Change</th>
               </tr>
@@ -209,6 +256,9 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
                   </td>
                   <td className="p-3 border text-right">
                     {formatCurrency(position.totalSells, position.currency)}
+                  </td>
+                  <td className="p-3 border text-right text-blue-600">
+                    {formatCurrency(position.dividends, "EUR")}
                   </td>
                   <td className={`p-3 border text-right font-semibold ${
                     position.realizedProfitLoss >= 0 
@@ -241,6 +291,9 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
                     closedPositions.reduce((sum, p) => sum + p.totalSells, 0),
                     defaultCurrency
                   )}
+                </td>
+                <td className="p-3 border text-right text-blue-600">
+                  {formatCurrency(totalDividends, "EUR")}
                 </td>
                 <td className={`p-3 border text-right ${
                   totalRealizedPL >= 0 ? "text-green-600" : "text-red-600"

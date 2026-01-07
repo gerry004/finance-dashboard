@@ -1,7 +1,7 @@
 'use client';
 
 import { NotionDatabaseData } from "@/types/notion";
-import { Trading212Position, Trading212HistoricalOrder } from "@/types/trading212";
+import { Trading212Position, Trading212HistoricalOrder, Trading212Dividend } from "@/types/trading212";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
 import { InvestmentsOverview } from "@/components/InvestmentsOverview";
@@ -13,6 +13,7 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
 import { handleUnauthorized } from "@/utils/authHelpers";
+import { fetchWithRetry, sleep } from "@/utils/apiHelpers";
 import { useEffect, useState, useMemo } from "react";
 
 export default function DashboardPage() {
@@ -29,6 +30,9 @@ export default function DashboardPage() {
   const [historicalOrders, setHistoricalOrders] = useState<Trading212HistoricalOrder[] | null>(null);
   const [historicalOrdersLoading, setHistoricalOrdersLoading] = useState(true);
   const [historicalOrdersError, setHistoricalOrdersError] = useState<string | null>(null);
+  const [historicalDividends, setHistoricalDividends] = useState<Trading212Dividend[] | null>(null);
+  const [historicalDividendsLoading, setHistoricalDividendsLoading] = useState(true);
+  const [historicalDividendsError, setHistoricalDividendsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
 
   // Check authentication status on mount
@@ -98,99 +102,88 @@ export default function DashboardPage() {
     fetchData();
   }, [isAuthenticated]);
 
-  // Fetch Trading 212 open positions
+  // Fetch all Trading 212 data sequentially to avoid rate limits
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const fetchTrading212Positions = async () => {
-      setTrading212Loading(true);
-      setTrading212Error(null);
-      
-      try {
-        const response = await fetch('/api/trading212', { credentials: 'include' });
+    const fetchTrading212Data = async () => {
+      // Helper function to fetch and parse API response
+      const fetchApiData = async (
+        endpoint: string,
+        setData: (data: any) => void,
+        setLoading: (loading: boolean) => void,
+        setError: (error: string | null) => void,
+        errorMessage: string
+      ) => {
+        setLoading(true);
+        setError(null);
         
-        if (!response.ok) {
-          if (handleUnauthorized(response)) {
-            setIsAuthenticated(false);
-            return;
+        try {
+          const response = await fetchWithRetry(endpoint, { credentials: 'include' });
+          
+          if (!response.ok) {
+            if (handleUnauthorized(response)) {
+              setIsAuthenticated(false);
+              return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const trading212Data = await response.json();
-        
-        // Extract positions from the response
-        // The API returns { data: [...] } so we need to handle that
-        if (trading212Data.data) {
-          // Check if data is an array
-          if (Array.isArray(trading212Data.data)) {
-            setTrading212Positions(trading212Data.data);
-          } else if (trading212Data.data.error) {
-            setTrading212Error(trading212Data.data.error);
+          
+          const responseData = await response.json();
+          
+          // Extract data from response
+          if (responseData.data) {
+            if (Array.isArray(responseData.data)) {
+              setData(responseData.data);
+            } else if (responseData.data.error) {
+              setError(responseData.data.error);
+            } else {
+              setData([]);
+            }
+          } else if (responseData.error) {
+            setError(responseData.error);
           } else {
-            // If data is an object, try to find positions array
-            setTrading212Positions([]);
+            setData([]);
           }
-        } else if (trading212Data.error) {
-          setTrading212Error(trading212Data.error);
-        } else {
-          setTrading212Positions([]);
+        } catch (error) {
+          console.error(errorMessage, error);
+          setError(error instanceof Error ? error.message : errorMessage);
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching Trading 212 positions:', error);
-        setTrading212Error(error instanceof Error ? error.message : 'An error occurred while fetching Trading 212 positions');
-      } finally {
-        setTrading212Loading(false);
-      }
+      };
+
+      // Fetch sequentially with delays to avoid rate limits
+      await fetchApiData(
+        '/api/trading212',
+        (data) => setTrading212Positions(Array.isArray(data) ? data : []),
+        setTrading212Loading,
+        setTrading212Error,
+        'Error fetching Trading 212 positions'
+      );
+
+      await sleep(500); // Delay between requests
+      
+      await fetchApiData(
+        '/api/trading212/historical_orders',
+        (data) => setHistoricalOrders(Array.isArray(data) ? data : []),
+        setHistoricalOrdersLoading,
+        setHistoricalOrdersError,
+        'Error fetching Trading 212 historical orders'
+      );
+
+      await sleep(500); // Delay between requests
+      
+      await fetchApiData(
+        '/api/trading212/historical_dividends',
+        (data) => setHistoricalDividends(Array.isArray(data) ? data : []),
+        setHistoricalDividendsLoading,
+        setHistoricalDividendsError,
+        'Error fetching Trading 212 historical dividends'
+      );
     };
 
-    fetchTrading212Positions();
-  }, [isAuthenticated]);
-
-  // Fetch Trading 212 historical orders
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const fetchHistoricalOrders = async () => {
-      setHistoricalOrdersLoading(true);
-      setHistoricalOrdersError(null);
-      
-      try {
-        const response = await fetch('/api/trading212/historical_orders', { credentials: 'include' });
-        
-        if (!response.ok) {
-          if (handleUnauthorized(response)) {
-            setIsAuthenticated(false);
-            return;
-          }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const ordersData = await response.json();
-        
-        // Extract orders from the response
-        if (ordersData.data) {
-          if (Array.isArray(ordersData.data)) {
-            setHistoricalOrders(ordersData.data);
-          } else if (ordersData.data.error) {
-            setHistoricalOrdersError(ordersData.data.error);
-          } else {
-            setHistoricalOrders([]);
-          }
-        } else if (ordersData.error) {
-          setHistoricalOrdersError(ordersData.error);
-        } else {
-          setHistoricalOrders([]);
-        }
-      } catch (error) {
-        console.error('Error fetching Trading 212 historical orders:', error);
-        setHistoricalOrdersError(error instanceof Error ? error.message : 'An error occurred while fetching Trading 212 historical orders');
-      } finally {
-        setHistoricalOrdersLoading(false);
-      }
-    };
-
-    fetchHistoricalOrders();
+    fetchTrading212Data();
   }, [isAuthenticated]);
 
   // Extract available tags from schema
@@ -309,14 +302,16 @@ export default function DashboardPage() {
           <InvestmentsOverview 
             positions={trading212Positions}
             orders={historicalOrders}
-            loading={trading212Loading}
-            error={trading212Error}
+            dividends={historicalDividends}
+            loading={trading212Loading || historicalDividendsLoading}
+            error={trading212Error || historicalDividendsError}
           />
           <RealizedProfitLoss 
             orders={historicalOrders}
             positions={trading212Positions}
-            loading={historicalOrdersLoading || trading212Loading}
-            error={historicalOrdersError || trading212Error}
+            dividends={historicalDividends}
+            loading={historicalOrdersLoading || trading212Loading || historicalDividendsLoading}
+            error={historicalOrdersError || trading212Error || historicalDividendsError}
           />
           <HistoricalOrdersTable 
             orders={historicalOrders}

@@ -12,16 +12,16 @@ export async function GET() {
     
     const authHeader = createTrading212AuthHeader(credentials);
 
-    const allOrders = [];
+    const allDividends = [];
     const limit = 20;
     let nextPagePath: string | null = null;
 
-    // Paginate to get all orders using nextPagePath
+    // Paginate to get all dividends using nextPagePath
     while (true) {
       // Use nextPagePath if available, otherwise start with initial request
       const url = nextPagePath 
         ? `https://live.trading212.com${nextPagePath}`
-        : `https://live.trading212.com/api/v0/equity/history/orders?limit=${limit}`;
+        : `https://live.trading212.com/api/v0/equity/history/dividends?limit=${limit}`;
 
       // Retry logic for rate limiting
       let resp: Response | null = null;
@@ -39,7 +39,7 @@ export async function GET() {
         if (resp.status === 429 && retries < maxRetries) {
           // Rate limited - wait with exponential backoff
           const delay = 1000 * Math.pow(2, retries);
-          console.warn(`Rate limited (429) on orders pagination. Retrying in ${delay}ms...`);
+          console.warn(`Rate limited (429) on dividends pagination. Retrying in ${delay}ms...`);
           await sleep(delay);
           retries++;
           continue;
@@ -56,7 +56,7 @@ export async function GET() {
       // TypeScript now knows resp is assigned (loop always executes at least once)
       if (!resp) {
         return NextResponse.json(
-          { error: "Failed to fetch Trading 212 historical orders" },
+          { error: "Failed to fetch Trading 212 historical dividends" },
           { status: 500 }
         );
       }
@@ -74,7 +74,7 @@ export async function GET() {
 
       // Extract items and nextPagePath from response
       if (parsedData?.items && Array.isArray(parsedData.items)) {
-        allOrders.push(...parsedData.items);
+        allDividends.push(...parsedData.items);
         nextPagePath = parsedData.nextPagePath || null;
         
         // If nextPagePath is null, we've reached the end
@@ -91,11 +91,11 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ data: allOrders });
+    return NextResponse.json({ data: allDividends });
   } catch (error) {
-    console.error("Error fetching Trading 212 historical orders:", error);
+    console.error("Error fetching Trading 212 historical dividends:", error);
     return NextResponse.json(
-      { error: "Failed to fetch Trading 212 historical orders", details: error instanceof Error ? error.message : String(error) },
+      { error: "Failed to fetch Trading 212 historical dividends", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

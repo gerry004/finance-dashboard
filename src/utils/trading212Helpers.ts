@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 
 /**
+ * Sleep utility for delays
+ */
+export function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Parse Trading212 API response, handling both JSON and text responses
  * @param data - The raw response data (text or JSON string)
  * @returns Parsed data object or the original data if parsing fails

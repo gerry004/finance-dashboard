@@ -70,4 +70,22 @@ export interface Trading212HistoricalOrder {
   order: Trading212Order;
 }
 
+export interface Trading212Dividend {
+  amount: number;
+  amountInEuro: number;
+  currency: string;
+  grossAmountPerShare: number;
+  instrument: {
+    ticker: string;
+    name: string;
+    isin: string;
+    currency: string;
+  };
+  paidOn: string;
+  quantity: number;
+  reference: string;
+  ticker: string;
+  type: "DIVIDEND";
+}
+
 
