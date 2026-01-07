@@ -45,12 +45,6 @@ export function RealizedProfitLoss({ orders, positions, dividends, loading, erro
     column: null,
     direction: "asc",
   });
-  // Log dividends when they change
-  useEffect(() => {
-    if (dividends) {
-      console.log('Historical Dividends:', dividends);
-    }
-  }, [dividends]);
 
   // Get set of tickers that are currently open
   const openTickers = useMemo(() => {
