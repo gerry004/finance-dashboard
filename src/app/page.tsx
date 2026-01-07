@@ -118,7 +118,6 @@ export default function DashboardPage() {
         }
         
         const trading212Data = await response.json();
-        console.log('Trading 212 Open Positions:', trading212Data);
         
         // Extract positions from the response
         // The API returns { data: [...] } so we need to handle that
@@ -168,7 +167,6 @@ export default function DashboardPage() {
         }
         
         const ordersData = await response.json();
-        console.log('Trading 212 Historical Orders:', ordersData);
         
         // Extract orders from the response
         if (ordersData.data) {

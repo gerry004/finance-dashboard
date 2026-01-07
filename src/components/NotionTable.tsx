@@ -73,7 +73,6 @@ function compareValues(a: any, b: any, direction: "asc" | "desc") {
     b = b.props.children;
   }
   if (Array.isArray(a) && Array.isArray(b)) {
-    console.log(a, b);
     a = a[0].props.children;
     b = b[0].props.children;
   }
