@@ -187,8 +187,8 @@ export function RealizedProfitLoss({ orders, positions, loading, error }: Realiz
       </div>
 
       {/* Closed Positions Table */}
-      <div className="p-4 bg-white rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Closed Positions - Realized Profit/Loss</h3>
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Closed Positions</h3>
         <div className="overflow-x-auto rounded-lg">
           <table className="w-full border-collapse">
             <thead>

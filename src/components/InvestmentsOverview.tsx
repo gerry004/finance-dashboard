@@ -236,7 +236,7 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
               ? "text-green-800" 
               : "text-red-800"
           }`}>
-            Total Unrealized P/L
+            Total Unrealized Profit/Loss
           </h3>
           <p className={`text-3xl font-bold ${
             totalUnrealizedPL >= 0 
@@ -249,7 +249,7 @@ export function InvestmentsOverview({ positions, orders, loading, error }: Inves
       </div>
 
       {/* Positions Table */}
-      <div className="p-4 bg-white rounded-lg shadow">
+      <div>
         <h3 className="text-lg font-semibold mb-4">Open Positions</h3>
         <div className="overflow-x-auto rounded-lg">
           <table className="w-full border-collapse">

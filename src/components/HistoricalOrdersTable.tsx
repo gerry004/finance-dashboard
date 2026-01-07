@@ -100,7 +100,7 @@ export function HistoricalOrdersTable({ orders, loading, error }: HistoricalOrde
 
   return (
     <div className="space-y-6 mb-8">
-      <div className="p-4 bg-white rounded-lg shadow">
+      <div>
         <h3 className="text-lg font-semibold mb-4">Filled Orders</h3>
         <div className="overflow-x-auto rounded-lg">
           <table className="w-full border-collapse">
