@@ -30,7 +30,7 @@ interface MonthlyData {
   monthLabel: string;
   income: number;
   expenditure: number;
-  checkingAtStart: number;
+  checkingAtEnd: number;
 }
 
 export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, onDataPointClick }: MonthlyFinancialChartProps) {
@@ -70,6 +70,7 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
       master: number;
       investmentBuys: number;
       investmentSells: number;
+      investmentOther: number;
     }>();
 
     // Process transactions chronologically to calculate checking balance
@@ -78,12 +79,20 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
     let cumulativeExpenditure = 0;
     let cumulativeInvestmentSells = 0;
     let cumulativeInvestmentBuys = 0;
+    let cumulativeInvestmentOther = 0;
     
-    const checkingAtStartByMonth = new Map<string, number>();
+    const checkingAtEndByMonth = new Map<string, number>();
+    let previousMonthKey: string | null = null;
 
     filteredPages.forEach((item) => {
       const date = new Date(item.date!);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      // If we've moved to a new month, store the checking balance at end of previous month
+      if (previousMonthKey !== null && previousMonthKey !== monthKey) {
+        const checkingAtEnd = cumulativeMaster + cumulativeIncome - cumulativeExpenditure + cumulativeInvestmentSells - cumulativeInvestmentBuys + cumulativeInvestmentOther;
+        checkingAtEndByMonth.set(previousMonthKey, checkingAtEnd);
+      }
       
       // Initialize month if not exists
       if (!monthlyMap.has(monthKey)) {
@@ -93,11 +102,8 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
           master: 0,
           investmentBuys: 0,
           investmentSells: 0,
+          investmentOther: 0,
         });
-        
-        // Store checking balance at start of this month (before any transactions)
-        const checkingAtStart = cumulativeMaster + cumulativeIncome - cumulativeExpenditure + cumulativeInvestmentSells - cumulativeInvestmentBuys;
-        checkingAtStartByMonth.set(monthKey, checkingAtStart);
       }
 
       const monthData = monthlyMap.get(monthKey)!;
@@ -122,9 +128,21 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
         } else if (hasSellTag) {
           monthData.investmentSells += Math.abs(item.amount);
           cumulativeInvestmentSells += Math.abs(item.amount);
+        } else {
+          // Investment transactions without buy/sell tags - use actual value (can be positive or negative)
+          monthData.investmentOther += item.amount;
+          cumulativeInvestmentOther += item.amount;
         }
       }
+      
+      previousMonthKey = monthKey;
     });
+    
+    // Store checking balance at end of the last month
+    if (previousMonthKey !== null) {
+      const checkingAtEnd = cumulativeMaster + cumulativeIncome - cumulativeExpenditure + cumulativeInvestmentSells - cumulativeInvestmentBuys + cumulativeInvestmentOther;
+      checkingAtEndByMonth.set(previousMonthKey, checkingAtEnd);
+    }
 
     // Convert to array and format labels
     const monthlyArray: MonthlyData[] = Array.from(monthlyMap.entries())
@@ -138,7 +156,7 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
           monthLabel,
           income: monthData.income,
           expenditure: monthData.expenditure,
-          checkingAtStart: checkingAtStartByMonth.get(monthKey) || 0,
+          checkingAtEnd: checkingAtEndByMonth.get(monthKey) || 0,
         };
       })
       .sort((a, b) => a.month.localeCompare(b.month));
@@ -165,8 +183,8 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
         tension: 0.1,
       },
       {
-        label: 'Checking at Start',
-        data: monthlyData.map(d => d.checkingAtStart),
+        label: 'Checking at End',
+        data: monthlyData.map(d => d.checkingAtEnd),
         borderColor: '#f59e0b', // amber
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
         tension: 0.1,
@@ -211,7 +229,7 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
           type = 'income';
         } else if (datasetLabel === 'Expenditure') {
           type = 'expenditure';
-        } else if (datasetLabel === 'Checking at Start') {
+        } else if (datasetLabel === 'Checking at End') {
           // For checking, we need to find the month key
           const monthDataItem = monthlyData[index];
           if (monthDataItem) {

@@ -66,6 +66,9 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
           acc.investmentBuys += Math.abs(amount);
         } else if (hasSellTag) {
           acc.investmentSells += Math.abs(amount);
+        } else {
+          // Investment transactions without buy/sell tags - use actual value (can be positive or negative)
+          acc.investmentOther += amount;
         }
       }
 
@@ -76,12 +79,13 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
       master: 0,
       investmentBuys: 0,
       investmentSells: 0,
+      investmentOther: 0,
       incomeByTag: {},
       expenditureByTag: {}
     });
 
   // Calculate checking balance
-  metrics.checking = metrics.master + metrics.income - metrics.expenditure + metrics.investmentSells - metrics.investmentBuys;
+  metrics.checking = metrics.master + metrics.income - metrics.expenditure + metrics.investmentSells - metrics.investmentBuys + metrics.investmentOther;
 
   // Sort tag totals and calculate percentages
   const sortedIncomeTags = Object.entries(metrics.incomeByTag)
