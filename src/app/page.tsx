@@ -10,6 +10,7 @@ import { RealizedProfitLoss } from "@/components/RealizedProfitLoss";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { DatabaseSelector } from "@/components/DatabaseSelector";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
 import { handleUnauthorized } from "@/utils/authHelpers";
@@ -34,6 +35,8 @@ export default function DashboardPage() {
   const [historicalDividendsLoading, setHistoricalDividendsLoading] = useState(true);
   const [historicalDividendsError, setHistoricalDividendsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
+  const [availableDatabases, setAvailableDatabases] = useState<Record<string, string>>({});
+  const [selectedDatabase, setSelectedDatabase] = useState<string>('');
 
   // Check authentication status on mount
   // Middleware handles API authentication, but we need to check client-side for UI
@@ -71,15 +74,57 @@ export default function DashboardPage() {
     setIsAuthenticated(true);
   };
 
+  // Fetch available databases on mount
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    const fetchDatabases = async () => {
+      try {
+        const response = await fetch('/api/notion/databases', { credentials: 'include' });
+        
+        if (!response.ok) {
+          if (handleUnauthorized(response)) {
+            setIsAuthenticated(false);
+            return;
+          }
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const { databases } = await response.json();
+        setAvailableDatabases(databases || {});
+        
+        // Set default selected database: "Finance 2026" if exists, otherwise first database
+        const databaseNames = Object.keys(databases || {});
+        if (databaseNames.length > 0) {
+          const defaultDatabase = databaseNames.includes('Finance 2026') 
+            ? 'Finance 2026' 
+            : databaseNames[0];
+          setSelectedDatabase(defaultDatabase);
+        }
+      } catch (error) {
+        console.error('Error fetching databases:', error);
+        // Don't set error state here, just log it
+      }
+    };
+
+    fetchDatabases();
+  }, [isAuthenticated]);
+
+  // Fetch Notion data when authenticated and database is selected
+  useEffect(() => {
+    if (!isAuthenticated || !selectedDatabase) return;
 
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       
       try {
-        const response = await fetch('/api/notion', { credentials: 'include' });
+        const databaseId = availableDatabases[selectedDatabase];
+        const url = databaseId 
+          ? `/api/notion?databaseId=${encodeURIComponent(selectedDatabase)}`
+          : '/api/notion';
+        
+        const response = await fetch(url, { credentials: 'include' });
         
         if (!response.ok) {
           if (handleUnauthorized(response)) {
@@ -100,7 +145,7 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedDatabase, availableDatabases]);
 
   // Fetch all Trading 212 data sequentially to avoid rate limits
   useEffect(() => {
@@ -198,6 +243,15 @@ export default function DashboardPage() {
     setEndDate(newEndDate);
   };
 
+  // Handle database change
+  const handleDatabaseChange = (databaseName: string) => {
+    setSelectedDatabase(databaseName);
+    // Reset filters when switching databases
+    setExcludedTags(new Set());
+    setStartDate(null);
+    setEndDate(null);
+  };
+
   // Show loading while checking authentication
   if (isAuthenticated === null) {
     return <LoadingSkeleton type="dashboard" />;
@@ -208,7 +262,8 @@ export default function DashboardPage() {
     return <PasscodePrompt onAuthenticated={handleAuthenticated} />;
   }
 
-  if (loading) {
+  // Show loading while waiting for databases to load or data to fetch
+  if (!selectedDatabase || loading) {
     return <LoadingSkeleton type="dashboard" />;
   }
 
@@ -246,7 +301,15 @@ export default function DashboardPage() {
     <main className="container mx-auto py-10">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-4xl font-bold">Personal Finance Dashboard</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {activeTab === 'checking' && (
+            <DatabaseSelector
+              databases={availableDatabases}
+              selectedDatabase={selectedDatabase}
+              onDatabaseChange={handleDatabaseChange}
+              loading={loading}
+            />
+          )}
           <button
             onClick={() => setActiveTab('checking')}
             className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
