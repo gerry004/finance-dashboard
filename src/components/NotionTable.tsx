@@ -4,13 +4,14 @@ import { NotionDatabaseData } from "@/types/notion";
 import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import { useState } from "react";
 import { NOTION_COLOR_MAP } from "@/utils/constants";
-import { shouldIncludePage } from "@/utils/notionFilters";
+import { shouldIncludePage, extractCreatedDate, extractType } from "@/utils/notionFilters";
 
 interface NotionTableProps {
   data: NotionDatabaseData;
   excludedTags: Set<string>;
   startDate: string | null;
   endDate: string | null;
+  chartFilter?: { month: string; type: string } | null;
 }
 
 // Add type for sorting
@@ -38,7 +39,27 @@ function formatProperty(property: any, excludedTags?: Set<string>) {
       );
 
     case "date":
-      return property.date?.start || "";
+      const dateValue = property.date?.start || "";
+      if (dateValue) {
+        // Format date to show only date part (YYYY-MM-DD)
+        const date = new Date(dateValue);
+        return date.toISOString().split('T')[0];
+      }
+      return "";
+
+    case "formula":
+      // Handle formula fields that return dates
+      if (property.formula?.type === "date") {
+        const formulaDateValue = property.formula.date?.start || "";
+        if (formulaDateValue) {
+          // Format date to show only date part (YYYY-MM-DD)
+          const date = new Date(formulaDateValue);
+          return date.toISOString().split('T')[0];
+        }
+        return "";
+      }
+      // Handle other formula result types if needed
+      return JSON.stringify(property.formula);
 
     case "multi_select":
       return property.multi_select
@@ -84,13 +105,13 @@ function compareValues(a: any, b: any, direction: "asc" | "desc") {
   return direction === "asc" ? (a < b ? -1 : 1) : a < b ? 1 : -1;
 }
 
-export function NotionTable({ data, excludedTags, startDate, endDate }: NotionTableProps) {
+export function NotionTable({ data, excludedTags, startDate, endDate, chartFilter }: NotionTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     column: null,
     direction: "asc",
   });
 
-  const desiredOrder = ["Description", "Amount", "Type", "Tags", "Created"];
+  const desiredOrder = ["Description", "Amount", "Type", "Tags", "Created Date"];
   const columns = Object.entries(data.schema.properties)
     .filter(([_, property]) => {
       if (property.type === "title") return true;
@@ -112,7 +133,38 @@ export function NotionTable({ data, excludedTags, startDate, endDate }: NotionTa
   const sortedPages = data.pages
     .filter((page) => {
       const typedPage = page as PageObjectResponse;
-      return shouldIncludePage(typedPage, excludedTags, startDate, endDate);
+      
+      // Apply standard filters
+      if (!shouldIncludePage(typedPage, excludedTags, startDate, endDate)) {
+        return false;
+      }
+      
+      // Apply chart filter if set
+      if (chartFilter) {
+        // Check month filter first
+        const createdDate = extractCreatedDate(typedPage);
+        if (!createdDate) {
+          // Exclude pages without dates when filtering by month
+          return false;
+        }
+        
+        const pageDate = new Date(createdDate);
+        const pageMonthKey = `${pageDate.getFullYear()}-${String(pageDate.getMonth() + 1).padStart(2, '0')}`;
+        if (pageMonthKey !== chartFilter.month) {
+          return false;
+        }
+        
+        // For "checking" type, show all transactions in that month
+        // For other types, filter by transaction type
+        if (chartFilter.type !== 'checking') {
+          const pageType = extractType(typedPage.properties['Type']);
+          if (pageType !== chartFilter.type) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
     })
     .sort((a, b) => {
       if (!sortConfig.column) return 0;

@@ -19,10 +19,8 @@ export function shouldIncludePage(
   startDate: string | null = null,
   endDate: string | null = null
 ): boolean {
-  // Filter by date range
-  const createdDate = page.properties['Created']?.type === 'date'
-    ? page.properties['Created'].date?.start
-    : null;
+  // Filter by date range - use extractCreatedDate to handle both formula and date fields
+  const createdDate = extractCreatedDate(page);
   
   if (!isDateInRange(createdDate, startDate, endDate)) {
     return false;
@@ -51,13 +49,26 @@ export function extractTagsFromPage(page: PageObjectResponse): string[] {
 
 /**
  * Extract the created date from a Notion page
+ * Prioritizes "Created Date" formula field, falls back to "Created" date field
  * @param page - The Notion page
  * @returns The created date string or null
  */
 export function extractCreatedDate(page: PageObjectResponse): string | null {
-  return page.properties['Created']?.type === 'date'
-    ? page.properties['Created'].date?.start || null
-    : null;
+  // Try "Created Date" formula field first
+  const createdDateProperty = page.properties['Created Date'];
+  if (createdDateProperty?.type === 'formula') {
+    const formulaResult = createdDateProperty.formula;
+    if (formulaResult?.type === 'date' && formulaResult.date?.start) {
+      return formulaResult.date.start;
+    }
+  }
+  
+  // Fall back to "Created" date field
+  if (page.properties['Created']?.type === 'date') {
+    return page.properties['Created'].date?.start || null;
+  }
+  
+  return null;
 }
 
 /**

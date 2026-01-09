@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { NotionDatabaseData } from "@/types/notion";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
+import { MonthlyFinancialChart } from "@/components/MonthlyFinancialChart";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -29,6 +30,7 @@ function DashboardContent() {
   const [endDate, setEndDate] = useState<string | null>(null);
   const [availableDatabases, setAvailableDatabases] = useState<Record<string, string>>({});
   const [selectedDatabase, setSelectedDatabase] = useState<string>('');
+  const [chartFilter, setChartFilter] = useState<{ month: string; type: string } | null>(null);
 
   // Check authentication status on mount
   // Middleware handles API authentication, but we need to check client-side for UI
@@ -118,13 +120,19 @@ function DashboardContent() {
     };
 
     fetchDatabases();
-  }, [isAuthenticated, searchParams, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   // Handle URL param changes (e.g., browser back/forward)
+  const urlDatabaseRef = useRef<string | null>(null);
   useEffect(() => {
     if (!databasesInitializedRef.current || !isAuthenticated) return;
     
     const urlDatabase = searchParams.get('db');
+    // Only process if URL database actually changed
+    if (urlDatabaseRef.current === urlDatabase) return;
+    urlDatabaseRef.current = urlDatabase;
+    
     const databaseNames = Object.keys(availableDatabases);
     
     if (urlDatabase && databaseNames.includes(urlDatabase) && urlDatabase !== selectedDatabase) {
@@ -133,12 +141,20 @@ function DashboardContent() {
       setExcludedTags(new Set());
       setStartDate(null);
       setEndDate(null);
+      setChartFilter(null);
     }
-  }, [searchParams, availableDatabases, selectedDatabase, isAuthenticated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, availableDatabases, isAuthenticated]);
 
   // Fetch Notion data when authenticated and database is selected
+  const dataFetchRef = useRef<string>('');
   useEffect(() => {
     if (!isAuthenticated || !selectedDatabase) return;
+    
+    // Prevent duplicate fetches for the same database
+    const fetchKey = `${selectedDatabase}-${availableDatabases[selectedDatabase] || ''}`;
+    if (dataFetchRef.current === fetchKey) return;
+    dataFetchRef.current = fetchKey;
 
     const fetchData = async () => {
       setLoading(true);
@@ -165,6 +181,7 @@ function DashboardContent() {
       } catch (error) {
         console.error('Error fetching data:', error);
         setError(error instanceof Error ? error.message : 'An error occurred while fetching data');
+        dataFetchRef.current = ''; // Reset on error to allow retry
       } finally {
         setLoading(false);
       }
@@ -188,15 +205,33 @@ function DashboardContent() {
 
   // Handle database change
   const handleDatabaseChange = (databaseName: string) => {
+    // Only proceed if database is actually changing
+    if (databaseName === selectedDatabase) return;
+    
+    // Update URL first, then state will sync via the URL effect
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('db', databaseName);
+    router.replace(`?${params.toString()}`, { scroll: false });
+    
+    // Update state immediately for better UX
     setSelectedDatabase(databaseName);
     // Reset filters when switching databases
     setExcludedTags(new Set());
     setStartDate(null);
     setEndDate(null);
-    // Update URL params
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('db', databaseName);
-    router.replace(`?${params.toString()}`, { scroll: false });
+    setChartFilter(null);
+    // Reset fetch ref to allow new fetch for the new database
+    dataFetchRef.current = '';
+  };
+
+  // Handle chart data point click
+  const handleChartClick = (month: string, type: string) => {
+    // If clicking the same filter, clear it
+    if (chartFilter?.month === month && chartFilter?.type === type) {
+      setChartFilter(null);
+    } else {
+      setChartFilter({ month, type });
+    }
   };
 
   // Show loading while checking authentication
@@ -286,11 +321,38 @@ function DashboardContent() {
         startDate={startDate}
         endDate={endDate}
       />
+      <MonthlyFinancialChart 
+        data={data} 
+        excludedTags={excludedTags}
+        startDate={startDate}
+        endDate={endDate}
+        onDataPointClick={handleChartClick}
+      />
+      {chartFilter && (() => {
+        const [year, month] = chartFilter.month.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const typeLabel = chartFilter.type === 'checking' ? 'all' : chartFilter.type;
+        return (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+            <span className="text-sm text-blue-800">
+              Filtered: {typeLabel} transactions in {monthLabel}
+            </span>
+            <button
+              onClick={() => setChartFilter(null)}
+              className="text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              Clear filter
+            </button>
+          </div>
+        );
+      })()}
       <NotionTable 
         data={data} 
         excludedTags={excludedTags}
         startDate={startDate}
         endDate={endDate}
+        chartFilter={chartFilter}
       />
     </main>
   );
