@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from "react";
 import { NotionDatabaseData } from "@/types/notion";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
@@ -14,7 +15,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const databasesInitializedRef = useRef(false);
@@ -292,5 +293,13 @@ export default function DashboardPage() {
         endDate={endDate}
       />
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton type="dashboard" />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
