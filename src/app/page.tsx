@@ -1,12 +1,8 @@
 'use client';
 
 import { NotionDatabaseData } from "@/types/notion";
-import { Trading212Position, Trading212HistoricalOrder, Trading212Dividend } from "@/types/trading212";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
-import { InvestmentsOverview } from "@/components/InvestmentsOverview";
-import { HistoricalOrdersTable } from "@/components/HistoricalOrdersTable";
-import { RealizedProfitLoss } from "@/components/RealizedProfitLoss";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
@@ -14,10 +10,15 @@ import { DatabaseSelector } from "@/components/DatabaseSelector";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
 import { handleUnauthorized } from "@/utils/authHelpers";
-import { fetchWithRetry, sleep } from "@/utils/apiHelpers";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const databasesInitializedRef = useRef(false);
+  
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [data, setData] = useState<NotionDatabaseData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,16 +26,6 @@ export default function DashboardPage() {
   const [excludedTags, setExcludedTags] = useState<Set<string>>(new Set());
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [trading212Positions, setTrading212Positions] = useState<Trading212Position[] | null>(null);
-  const [trading212Loading, setTrading212Loading] = useState(true);
-  const [trading212Error, setTrading212Error] = useState<string | null>(null);
-  const [historicalOrders, setHistoricalOrders] = useState<Trading212HistoricalOrder[] | null>(null);
-  const [historicalOrdersLoading, setHistoricalOrdersLoading] = useState(true);
-  const [historicalOrdersError, setHistoricalOrdersError] = useState<string | null>(null);
-  const [historicalDividends, setHistoricalDividends] = useState<Trading212Dividend[] | null>(null);
-  const [historicalDividendsLoading, setHistoricalDividendsLoading] = useState(true);
-  const [historicalDividendsError, setHistoricalDividendsError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'checking' | 'investments'>('checking');
   const [availableDatabases, setAvailableDatabases] = useState<Record<string, string>>({});
   const [selectedDatabase, setSelectedDatabase] = useState<string>('');
 
@@ -76,7 +67,7 @@ export default function DashboardPage() {
 
   // Fetch available databases on mount
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || databasesInitializedRef.current) return;
 
     const fetchDatabases = async () => {
       try {
@@ -92,14 +83,32 @@ export default function DashboardPage() {
         
         const { databases } = await response.json();
         setAvailableDatabases(databases || {});
+        databasesInitializedRef.current = true;
         
-        // Set default selected database: "Finance 2026" if exists, otherwise first database
+        // Check URL params first, then set default
         const databaseNames = Object.keys(databases || {});
         if (databaseNames.length > 0) {
-          const defaultDatabase = databaseNames.includes('Finance 2026') 
-            ? 'Finance 2026' 
-            : databaseNames[0];
-          setSelectedDatabase(defaultDatabase);
+          const urlDatabase = searchParams.get('db');
+          let databaseToSelect: string;
+          
+          if (urlDatabase && databaseNames.includes(urlDatabase)) {
+            // Use database from URL if it exists
+            databaseToSelect = urlDatabase;
+          } else {
+            // Default to "Finance 2026" if exists, otherwise first database
+            databaseToSelect = databaseNames.includes('Finance 2026') 
+              ? 'Finance 2026' 
+              : databaseNames[0];
+          }
+          
+          setSelectedDatabase(databaseToSelect);
+          
+          // Update URL if it doesn't match
+          if (urlDatabase !== databaseToSelect) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('db', databaseToSelect);
+            router.replace(`?${params.toString()}`, { scroll: false });
+          }
         }
       } catch (error) {
         console.error('Error fetching databases:', error);
@@ -108,7 +117,23 @@ export default function DashboardPage() {
     };
 
     fetchDatabases();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, searchParams, router]);
+
+  // Handle URL param changes (e.g., browser back/forward)
+  useEffect(() => {
+    if (!databasesInitializedRef.current || !isAuthenticated) return;
+    
+    const urlDatabase = searchParams.get('db');
+    const databaseNames = Object.keys(availableDatabases);
+    
+    if (urlDatabase && databaseNames.includes(urlDatabase) && urlDatabase !== selectedDatabase) {
+      setSelectedDatabase(urlDatabase);
+      // Reset filters when switching databases
+      setExcludedTags(new Set());
+      setStartDate(null);
+      setEndDate(null);
+    }
+  }, [searchParams, availableDatabases, selectedDatabase, isAuthenticated]);
 
   // Fetch Notion data when authenticated and database is selected
   useEffect(() => {
@@ -147,89 +172,6 @@ export default function DashboardPage() {
     fetchData();
   }, [isAuthenticated, selectedDatabase, availableDatabases]);
 
-  // Fetch all Trading 212 data sequentially to avoid rate limits
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const fetchTrading212Data = async () => {
-      // Helper function to fetch and parse API response
-      const fetchApiData = async (
-        endpoint: string,
-        setData: (data: any) => void,
-        setLoading: (loading: boolean) => void,
-        setError: (error: string | null) => void,
-        errorMessage: string
-      ) => {
-        setLoading(true);
-        setError(null);
-        
-        try {
-          const response = await fetchWithRetry(endpoint, { credentials: 'include' });
-          
-          if (!response.ok) {
-            if (handleUnauthorized(response)) {
-              setIsAuthenticated(false);
-              return;
-            }
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const responseData = await response.json();
-          
-          // Extract data from response
-          if (responseData.data) {
-            if (Array.isArray(responseData.data)) {
-              setData(responseData.data);
-            } else if (responseData.data.error) {
-              setError(responseData.data.error);
-            } else {
-              setData([]);
-            }
-          } else if (responseData.error) {
-            setError(responseData.error);
-          } else {
-            setData([]);
-          }
-        } catch (error) {
-          console.error(errorMessage, error);
-          setError(error instanceof Error ? error.message : errorMessage);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      // Fetch sequentially with delays to avoid rate limits
-      await fetchApiData(
-        '/api/trading212',
-        (data) => setTrading212Positions(Array.isArray(data) ? data : []),
-        setTrading212Loading,
-        setTrading212Error,
-        'Error fetching Trading 212 positions'
-      );
-
-      await sleep(500); // Delay between requests
-      
-      await fetchApiData(
-        '/api/trading212/historical_orders',
-        (data) => setHistoricalOrders(Array.isArray(data) ? data : []),
-        setHistoricalOrdersLoading,
-        setHistoricalOrdersError,
-        'Error fetching Trading 212 historical orders'
-      );
-
-      await sleep(500); // Delay between requests
-      
-      await fetchApiData(
-        '/api/trading212/historical_dividends',
-        (data) => setHistoricalDividends(Array.isArray(data) ? data : []),
-        setHistoricalDividendsLoading,
-        setHistoricalDividendsError,
-        'Error fetching Trading 212 historical dividends'
-      );
-    };
-
-    fetchTrading212Data();
-  }, [isAuthenticated]);
 
   // Extract available tags from schema
   const availableTags = useMemo(() => {
@@ -250,6 +192,10 @@ export default function DashboardPage() {
     setExcludedTags(new Set());
     setStartDate(null);
     setEndDate(null);
+    // Update URL params
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('db', databaseName);
+    router.replace(`?${params.toString()}`, { scroll: false });
   };
 
   // Show loading while checking authentication
@@ -302,87 +248,49 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-4xl font-bold">Personal Finance Dashboard</h1>
         <div className="flex items-center gap-2">
-          {activeTab === 'checking' && (
-            <DatabaseSelector
-              databases={availableDatabases}
-              selectedDatabase={selectedDatabase}
-              onDatabaseChange={handleDatabaseChange}
-              loading={loading}
-            />
-          )}
-          <button
-            onClick={() => setActiveTab('checking')}
-            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
-              activeTab === 'checking'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+          <DatabaseSelector
+            databases={availableDatabases}
+            selectedDatabase={selectedDatabase}
+            onDatabaseChange={handleDatabaseChange}
+            loading={loading}
+          />
+          <Link
+            href="/"
+            className="px-6 py-2 rounded-lg font-semibold transition-colors bg-blue-600 text-white"
           >
             Checking
-          </button>
-          <button
-            onClick={() => setActiveTab('investments')}
-            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
-              activeTab === 'investments'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+          </Link>
+          <Link
+            href="/investments"
+            className="px-6 py-2 rounded-lg font-semibold transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
           >
             Investments
-          </button>
+          </Link>
         </div>
       </div>
 
-      {activeTab === 'checking' && (
-        <>
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onDateRangeChange={handleDateRangeChange}
-          />
-          <TagFilterControl
-            availableTags={availableTags}
-            excludedTags={excludedTags}
-            onExcludedTagsChange={setExcludedTags}
-          />
-          <FinancialOverview 
-            data={data} 
-            excludedTags={excludedTags}
-            startDate={startDate}
-            endDate={endDate}
-          />
-          <NotionTable 
-            data={data} 
-            excludedTags={excludedTags}
-            startDate={startDate}
-            endDate={endDate}
-          />
-        </>
-      )}
-
-      {activeTab === 'investments' && (
-        <>
-          <InvestmentsOverview 
-            positions={trading212Positions}
-            orders={historicalOrders}
-            dividends={historicalDividends}
-            loading={trading212Loading || historicalDividendsLoading}
-            error={trading212Error || historicalDividendsError}
-          />
-          <RealizedProfitLoss 
-            orders={historicalOrders}
-            positions={trading212Positions}
-            dividends={historicalDividends}
-            loading={historicalOrdersLoading || trading212Loading || historicalDividendsLoading}
-            error={historicalOrdersError || trading212Error || historicalDividendsError}
-          />
-          <HistoricalOrdersTable 
-            orders={historicalOrders}
-            loading={historicalOrdersLoading}
-            error={historicalOrdersError}
-          />
-        </>
-      )}
+      <DateRangePicker
+        startDate={startDate}
+        endDate={endDate}
+        onDateRangeChange={handleDateRangeChange}
+      />
+      <TagFilterControl
+        availableTags={availableTags}
+        excludedTags={excludedTags}
+        onExcludedTagsChange={setExcludedTags}
+      />
+      <FinancialOverview 
+        data={data} 
+        excludedTags={excludedTags}
+        startDate={startDate}
+        endDate={endDate}
+      />
+      <NotionTable 
+        data={data} 
+        excludedTags={excludedTags}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </main>
   );
 }
