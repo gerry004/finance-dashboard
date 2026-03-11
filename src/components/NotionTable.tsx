@@ -20,6 +20,9 @@ type SortConfig = {
   direction: "asc" | "desc";
 };
 
+// Transaction types that contribute to the checking balance calculation
+const CHECKING_CONTRIBUTING_TYPES = new Set(['income', 'expenditure', 'master', 'investment']);
+
 function formatProperty(property: any, excludedTags?: Set<string>) {
   if (!property) return "";
 
@@ -154,13 +157,16 @@ export function NotionTable({ data, excludedTags, startDate, endDate, chartFilte
           return false;
         }
         
-        // For "checking" type, show all transactions in that month
+        // For "checking" type, show only transactions that contribute to the checking calculation
+        // (excludes Creditors and other unhandled types)
         // For other types, filter by transaction type
-        if (chartFilter.type !== 'checking') {
-          const pageType = extractType(typedPage.properties['Type']);
-          if (pageType !== chartFilter.type) {
+        const pageType = extractType(typedPage.properties['Type']);
+        if (chartFilter.type === 'checking') {
+          if (!CHECKING_CONTRIBUTING_TYPES.has(pageType)) {
             return false;
           }
+        } else if (pageType !== chartFilter.type) {
+          return false;
         }
       }
       

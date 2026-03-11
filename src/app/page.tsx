@@ -332,7 +332,7 @@ function DashboardContent() {
         const [year, month] = chartFilter.month.split('-');
         const date = new Date(parseInt(year), parseInt(month) - 1);
         const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        const typeLabel = chartFilter.type === 'checking' ? 'all' : chartFilter.type;
+        const typeLabel = chartFilter.type === 'checking' ? 'contributing to checking' : chartFilter.type;
         return (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
             <span className="text-sm text-blue-800">

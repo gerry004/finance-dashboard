@@ -70,6 +70,8 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
           // Investment transactions without buy/sell tags - use actual value (can be positive or negative)
           acc.investmentOther += amount;
         }
+      } else if (type === 'creditors') {
+        acc.creditors += amount;
       }
 
       return acc;
@@ -80,6 +82,7 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
       investmentBuys: 0,
       investmentSells: 0,
       investmentOther: 0,
+      creditors: 0,
       incomeByTag: {},
       expenditureByTag: {}
     });
@@ -168,7 +171,7 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
 
   return (
     <div className="space-y-6 mb-8">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="p-4 bg-green-100 rounded-lg">
           <h3 className="text-lg font-semibold text-green-800">Total Income</h3>
           <p className="text-2xl font-bold text-green-900">
@@ -185,6 +188,12 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
           <h3 className="text-lg font-semibold text-blue-800">Cashflow</h3>
           <p className="text-2xl font-bold text-blue-900">
             €{(metrics.income - metrics.expenditure).toFixed(2)}
+          </p>
+        </div>
+        <div className="p-4 bg-violet-100 rounded-lg">
+          <h3 className="text-lg font-semibold text-violet-800">Creditors</h3>
+          <p className="text-2xl font-bold text-violet-900">
+            €{metrics.creditors.toFixed(2)}
           </p>
         </div>
         <div className="p-4 bg-amber-100 rounded-lg">
