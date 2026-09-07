@@ -116,13 +116,13 @@ export function NotionTable({ data, excludedTags, startDate, endDate, chartFilte
 
   const desiredOrder = ["Description", "Amount", "Type", "Tags", "Created Date"];
   const columns = Object.entries(data.schema.properties)
-    .filter(([_, property]) => {
+    .filter(([, property]) => {
       if (property.type === "title") return true;
       return desiredOrder.some(
         (name) => property.name.toLowerCase() === name.toLowerCase()
       );
     })
-    .sort(([_, a], [__, b]) => {
+    .sort(([, a], [, b]) => {
       if (a.type === "title") return -1;
       if (b.type === "title") return 1;
       return desiredOrder.indexOf(a.name) - desiredOrder.indexOf(b.name);

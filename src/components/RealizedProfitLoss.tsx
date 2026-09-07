@@ -1,7 +1,7 @@
 "use client";
 
 import { Trading212HistoricalOrder, Trading212Position, Trading212Dividend } from "@/types/trading212";
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
 interface RealizedProfitLossProps {
   orders: Trading212HistoricalOrder[] | null;
@@ -425,4 +425,3 @@ export function RealizedProfitLoss({ orders, positions, dividends, loading, erro
     </div>
   );
 }
-

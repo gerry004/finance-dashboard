@@ -10,7 +10,7 @@ import {
   Legend,
   Colors
 } from 'chart.js';
-import { shouldIncludePage, extractAmount, extractType, extractTagsFromPage } from "@/utils/notionFilters";
+import { shouldIncludePage, extractAmount, extractType } from "@/utils/notionFilters";
 
 ChartJS.register(ArcElement, Tooltip, Legend, Colors);
 

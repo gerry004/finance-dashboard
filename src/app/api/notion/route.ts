@@ -45,9 +45,9 @@ function getDatabaseId(databaseConfig: Record<string, string>, databaseIdParam?:
       return databaseConfig[databaseIdParam];
     }
     // Check if it's a direct ID
-    const foundEntry = Object.entries(databaseConfig).find(([_, id]) => id === databaseIdParam);
+    const foundEntry = Object.values(databaseConfig).find((id) => id === databaseIdParam);
     if (foundEntry) {
-      return foundEntry[1];
+      return foundEntry;
     }
     // If not found in config, assume it's a direct ID
     return databaseIdParam;
