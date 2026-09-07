@@ -128,7 +128,7 @@ export function TagFilterControl({
 
           {/* Help Text */}
           <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-            💡 Click on any tag to toggle between included and excluded. Excluded tags won't be
+            💡 Click on any tag to toggle between included and excluded. Excluded tags will not be
             counted in income/expenditure calculations.
           </div>
         </div>
@@ -136,4 +136,3 @@ export function TagFilterControl({
     </div>
   );
 }
-
