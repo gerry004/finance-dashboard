@@ -9,12 +9,12 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DataSourceSelector } from "@/components/DataSourceSelector";
+import { DashboardNav } from "@/components/DashboardNav";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
 import { handleUnauthorized } from "@/utils/authHelpers";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -272,30 +272,17 @@ function DashboardContent() {
   }
   
   return (
-    <main className="container mx-auto py-10">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-bold">Personal Finance Dashboard</h1>
-        <div className="flex items-center gap-2">
+    <main className="container mx-auto px-4 py-8 sm:py-10">
+      <DashboardNav
+        controls={
           <DataSourceSelector
             dataSources={availableDataSources}
             selectedDataSource={selectedDataSource}
             onDataSourceChange={handleDataSourceChange}
             loading={loading}
           />
-          <Link
-            href="/"
-            className="px-6 py-2 rounded-lg font-semibold transition-colors bg-blue-600 text-white"
-          >
-            Checking
-          </Link>
-          <Link
-            href="/investments"
-            className="px-6 py-2 rounded-lg font-semibold transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
-          >
-            Investments
-          </Link>
-        </div>
-      </div>
+        }
+      />
 
       <DateRangePicker
         startDate={startDate}

@@ -6,10 +6,10 @@ import { HistoricalOrdersTable } from "@/components/HistoricalOrdersTable";
 import { RealizedProfitLoss } from "@/components/RealizedProfitLoss";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
+import { DashboardNav } from "@/components/DashboardNav";
 import { handleUnauthorized } from "@/utils/authHelpers";
 import { fetchWithRetry, sleep } from "@/utils/apiHelpers";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 export default function InvestmentsPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -151,24 +151,8 @@ export default function InvestmentsPage() {
   }
 
   return (
-    <main className="container mx-auto py-10">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-bold">Personal Finance Dashboard</h1>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="px-6 py-2 rounded-lg font-semibold transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
-          >
-            Checking
-          </Link>
-          <Link
-            href="/investments"
-            className="px-6 py-2 rounded-lg font-semibold transition-colors bg-blue-600 text-white"
-          >
-            Investments
-          </Link>
-        </div>
-      </div>
+    <main className="container mx-auto px-4 py-8 sm:py-10">
+      <DashboardNav />
 
       <InvestmentsOverview 
         positions={trading212Positions}
@@ -192,4 +176,3 @@ export default function InvestmentsPage() {
     </main>
   );
 }
-
