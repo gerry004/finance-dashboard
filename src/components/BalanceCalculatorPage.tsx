@@ -4,24 +4,29 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { DashboardNav } from "@/components/DashboardNav";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import {
+  BALANCE_FIXED_VALUES,
   BALANCE_INPUT_KEYS,
+  DEFAULT_BALANCE_INPUTS,
   type BalanceCalculationResponse,
   type BalanceInputKey,
   type BalanceInputs,
-  type BalancePatchResponse,
 } from "@/types/balanceCalculation";
 import {
   calculateBalance,
   eurosToCents,
   parseEuroInput,
 } from "@/utils/balanceCalculation";
+import {
+  hasStoredBalanceInput,
+  loadStoredBalanceInputs,
+  saveStoredBalanceInput,
+} from "@/utils/balanceStorage";
 import { handleUnauthorized } from "@/utils/authHelpers";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -173,7 +178,6 @@ export function BalanceCalculatorPage() {
   const [saveStates, setSaveStates] = useState(createSaveStates);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const saveVersions = useRef<Partial<Record<BalanceInputKey, number>>>({});
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -225,9 +229,25 @@ export function BalanceCalculatorPage() {
       }
 
       const result = (await response.json()) as BalanceCalculationResponse;
+      const storedInputs = loadStoredBalanceInputs(
+        window.localStorage,
+        DEFAULT_BALANCE_INPUTS
+      );
+
+      if (
+        result.notionTarget !== null &&
+        !hasStoredBalanceInput(window.localStorage, "targetBalance")
+      ) {
+        storedInputs.targetBalance = saveStoredBalanceInput(
+          window.localStorage,
+          "targetBalance",
+          result.notionTarget
+        );
+      }
+
       setData(result);
-      setSavedInputs(result.inputs);
-      setInputValues(createInputValues(result.inputs));
+      setSavedInputs(storedInputs);
+      setInputValues(createInputValues(storedInputs));
       setSaveStates(createSaveStates());
     } catch (loadError) {
       console.error("Error loading balance calculation:", loadError);
@@ -263,11 +283,11 @@ export function BalanceCalculatorPage() {
   }, [inputValues, savedInputs]);
 
   const results = useMemo(() => {
-    if (!workingInputs || !data) {
+    if (!workingInputs) {
       return null;
     }
-    return calculateBalance(workingInputs, data.fixedValues);
-  }, [data, workingInputs]);
+    return calculateBalance(workingInputs, BALANCE_FIXED_VALUES);
+  }, [workingInputs]);
 
   const handleInputChange = (field: BalanceInputKey, value: string) => {
     setInputValues((current) =>
@@ -308,40 +328,23 @@ export function BalanceCalculatorPage() {
         return;
       }
 
-      const version = (saveVersions.current[field] ?? 0) + 1;
-      saveVersions.current[field] = version;
       setSaveStates((current) => ({
         ...current,
         [field]: { status: "saving" },
       }));
 
       try {
-        const response = await fetch("/api/balance-calculation", {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ field, value: parsed }),
-        });
-        if (!response.ok) {
-          if (handleUnauthorized(response)) {
-            setIsAuthenticated(false);
-            return;
-          }
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(body?.error ?? "Save failed");
-        }
-
-        const saved = (await response.json()) as BalancePatchResponse;
-        if (saveVersions.current[field] !== version) {
-          return;
-        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        const savedValue = saveStoredBalanceInput(
+          window.localStorage,
+          field,
+          parsed
+        );
         setSavedInputs((current) =>
-          current ? { ...current, [field]: saved.value } : current
+          current ? { ...current, [field]: savedValue } : current
         );
         setInputValues((current) =>
-          current ? { ...current, [field]: formatInput(saved.value) } : current
+          current ? { ...current, [field]: formatInput(savedValue) } : current
         );
         setSaveStates((current) => ({
           ...current,
@@ -349,12 +352,12 @@ export function BalanceCalculatorPage() {
         }));
       } catch (saveError) {
         console.error(`Error saving ${field}:`, saveError);
-        if (saveVersions.current[field] !== version) {
-          return;
-        }
         setSaveStates((current) => ({
           ...current,
-          [field]: { status: "error", message: "Save failed - blur to retry" },
+          [field]: {
+            status: "error",
+            message: "Browser storage failed - blur to retry",
+          },
         }));
       }
     },
@@ -543,7 +546,7 @@ export function BalanceCalculatorPage() {
             <CalculatorSection title="Trading 212 - Interest on Cash">
               <ReadOnlyAmountRow
                 label="Jan 1st"
-                value={data.fixedValues.trading212InterestOpening}
+                value={BALANCE_FIXED_VALUES.trading212InterestOpening}
               />
               <EditableAmountRow
                 field="trading212InterestToday"
@@ -571,7 +574,7 @@ export function BalanceCalculatorPage() {
               />
               <ReadOnlyAmountRow
                 label="Invested"
-                value={data.fixedValues.cashbackInvested}
+                value={BALANCE_FIXED_VALUES.cashbackInvested}
               />
               <ReadOnlyAmountRow
                 label="Uninvested"
@@ -596,7 +599,7 @@ export function BalanceCalculatorPage() {
             <CalculatorSection title="Revolut - Flexible Cash Funds">
               <ReadOnlyAmountRow
                 label="Jan 1st"
-                value={data.fixedValues.revolutFlexibleOpening}
+                value={BALANCE_FIXED_VALUES.revolutFlexibleOpening}
               />
               <EditableAmountRow
                 field="revolutFlexibleToday"
@@ -633,7 +636,7 @@ export function BalanceCalculatorPage() {
             />
             <ReadOnlyAmountRow
               label="Revolut - Flexible Cash Funds"
-              value={data.fixedValues.revolutFlexibleOpening}
+              value={BALANCE_FIXED_VALUES.revolutFlexibleOpening}
             />
             <EditableAmountRow
               field="trading212Cash"

@@ -40,38 +40,23 @@ export interface BalanceResults {
 }
 
 export interface BalanceCalculationResponse {
-  inputs: BalanceInputs;
-  fixedValues: BalanceFixedValues;
   notionTarget: number | null;
   warnings: string[];
 }
 
-export interface BalancePatchResponse {
-  field: BalanceInputKey;
-  value: number;
-  savedAt: string;
-}
-
-export const BALANCE_INPUT_CELL_MAP: Record<BalanceInputKey, string> = {
-  targetBalance: "F2",
-  trading212InterestToday: "C4",
-  cashbackAllTime: "C8",
-  cashbackPending: "C11",
-  revolutFlexibleToday: "C16",
-  cash: "C20",
-  revolutCash: "C21",
-  trading212Cash: "C23",
+export const DEFAULT_BALANCE_INPUTS: BalanceInputs = {
+  targetBalance: 17056.45,
+  trading212InterestToday: 980.54,
+  cashbackAllTime: 30.28,
+  cashbackPending: 0,
+  revolutFlexibleToday: 1005.74,
+  cash: 168.75,
+  revolutCash: 49.63,
+  trading212Cash: 16066.93,
 };
 
-export const BALANCE_FIXED_CELL_MAP = {
-  trading212InterestOpening: "C3",
-  cashbackInvested: "C9",
-  revolutFlexibleOpening: "C15",
-} as const satisfies Record<keyof BalanceFixedValues, string>;
-
-export function isBalanceInputKey(value: unknown): value is BalanceInputKey {
-  return (
-    typeof value === "string" &&
-    BALANCE_INPUT_KEYS.includes(value as BalanceInputKey)
-  );
-}
+export const BALANCE_FIXED_VALUES: BalanceFixedValues = {
+  trading212InterestOpening: 765.44,
+  cashbackInvested: 17.36,
+  revolutFlexibleOpening: 999.16,
+};

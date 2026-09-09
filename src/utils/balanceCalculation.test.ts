@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type {
-  BalanceFixedValues,
-  BalanceInputs,
+import {
+  BALANCE_FIXED_VALUES,
+  DEFAULT_BALANCE_INPUTS,
 } from "../types/balanceCalculation";
 import {
   calculateBalance,
@@ -9,25 +9,11 @@ import {
   parseEuroInput,
 } from "./balanceCalculation";
 
-const inputs: BalanceInputs = {
-  targetBalance: 17056.45,
-  trading212InterestToday: 980.54,
-  cashbackAllTime: 30.28,
-  cashbackPending: 0,
-  revolutFlexibleToday: 1005.74,
-  cash: 168.75,
-  revolutCash: 49.63,
-  trading212Cash: 16066.93,
-};
-
-const fixedValues: BalanceFixedValues = {
-  trading212InterestOpening: 765.44,
-  cashbackInvested: 17.36,
-  revolutFlexibleOpening: 999.16,
-};
+const inputs = DEFAULT_BALANCE_INPUTS;
+const fixedValues = BALANCE_FIXED_VALUES;
 
 describe("calculateBalance", () => {
-  it("reproduces the Google Sheet fixture exactly", () => {
+  it("reproduces the built-in fixture exactly", () => {
     expect(calculateBalance(inputs, fixedValues)).toEqual({
       trading212InterestThisYear: 215.1,
       cashbackUninvested: 12.92,
