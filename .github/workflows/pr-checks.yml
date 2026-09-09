@@ -1,0 +1,41 @@
+name: PR Checks
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    name: Lint, build, and E2E
+    runs-on: ubuntu-latest
+
+    env:
+      DASHBOARD_PASSCODE: test-passcode
+      NOTION_API_KEY: test-notion-api-key
+      NOTION_DATA_SOURCE_ID: '{"Finance 2026":"11111111111111111111111111111111","Side Account":"22222222222222222222222222222222"}'
+      TRADING_212_API_KEY: test-trading-212-key
+      TRADING_212_API_SECRET: test-trading-212-secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: E2E
+        run: npm run test:e2e
