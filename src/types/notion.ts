@@ -1,10 +1,10 @@
-import { DatabaseObjectResponse, PageObjectResponse, PartialPageObjectResponse, PartialDatabaseObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type { DataSourceObjectResponse, PageObjectResponse } from "@notionhq/client";
 
-export interface NotionDatabaseSchema {
-  properties: DatabaseObjectResponse['properties'];
+export interface NotionDataSourceSchema {
+  properties: DataSourceObjectResponse["properties"];
 }
 
-export interface NotionDatabaseData {
-  schema: NotionDatabaseSchema;
-  pages: (PageObjectResponse | PartialPageObjectResponse | PartialDatabaseObjectResponse)[];
+export interface NotionDataSourceData {
+  schema: NotionDataSourceSchema;
+  pages: PageObjectResponse[];
 }

@@ -1,13 +1,12 @@
 "use client";
 
-import { NotionDatabaseData } from "@/types/notion";
-import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import { NotionDataSourceData } from "@/types/notion";
 import { useState } from "react";
 import { NOTION_COLOR_MAP } from "@/utils/constants";
 import { shouldIncludePage, extractCreatedDate, extractType } from "@/utils/notionFilters";
 
 interface NotionTableProps {
-  data: NotionDatabaseData;
+  data: NotionDataSourceData;
   excludedTags: Set<string>;
   startDate: string | null;
   endDate: string | null;
@@ -135,17 +134,15 @@ export function NotionTable({ data, excludedTags, startDate, endDate, chartFilte
   // Filter and sort pages client-side
   const sortedPages = data.pages
     .filter((page) => {
-      const typedPage = page as PageObjectResponse;
-      
       // Apply standard filters
-      if (!shouldIncludePage(typedPage, excludedTags, startDate, endDate)) {
+      if (!shouldIncludePage(page, excludedTags, startDate, endDate)) {
         return false;
       }
       
       // Apply chart filter if set
       if (chartFilter) {
         // Check month filter first
-        const createdDate = extractCreatedDate(typedPage);
+        const createdDate = extractCreatedDate(page);
         if (!createdDate) {
           // Exclude pages without dates when filtering by month
           return false;
@@ -160,7 +157,7 @@ export function NotionTable({ data, excludedTags, startDate, endDate, chartFilte
         // For "checking" type, show only transactions that contribute to the checking calculation
         // (excludes Creditors and other unhandled types)
         // For other types, filter by transaction type
-        const pageType = extractType(typedPage.properties['Type']);
+        const pageType = extractType(page.properties['Type']);
         if (chartFilter.type === 'checking') {
           if (!CHECKING_CONTRIBUTING_TYPES.has(pageType)) {
             return false;
@@ -174,10 +171,8 @@ export function NotionTable({ data, excludedTags, startDate, endDate, chartFilte
     })
     .sort((a, b) => {
       if (!sortConfig.column) return 0;
-      const typedA = a as PageObjectResponse;
-      const typedB = b as PageObjectResponse;
-      const valueA = formatProperty(typedA.properties[sortConfig.column]);
-      const valueB = formatProperty(typedB.properties[sortConfig.column]);
+      const valueA = formatProperty(a.properties[sortConfig.column]);
+      const valueB = formatProperty(b.properties[sortConfig.column]);
       return compareValues(valueA, valueB, sortConfig.direction);
     });
 
@@ -217,11 +212,10 @@ export function NotionTable({ data, excludedTags, startDate, endDate, chartFilte
           </thead>
           <tbody>
             {sortedPages.map((page) => {
-              const typedPage = page as PageObjectResponse;
               return (
                 <tr key={page.id} className="border-b hover:bg-gray-50">
                   {columns.map((column) => {
-                    const property = typedPage.properties[column.id];
+                    const property = page.properties[column.id];
                     return (
                       <td key={column.id} className="p-2 border">
                         {formatProperty(property, excludedTags)}

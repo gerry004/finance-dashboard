@@ -1,109 +1,64 @@
-import { Client } from "@notionhq/client";
+import {
+  Client,
+  isFullDataSource,
+  isFullPage,
+  type PageObjectResponse,
+  type QueryDataSourceParameters,
+} from "@notionhq/client";
 import { NextResponse } from "next/server";
-import { NotionDatabaseData } from "@/types/notion";
-import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import { NotionDataSourceData } from "@/types/notion";
+import {
+  parseDataSourceConfig,
+  resolveDataSourceId,
+} from "@/utils/notionConfig";
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
+  notionVersion: "2025-09-03",
 });
-
-/**
- * Parse the NOTION_DATABASE_ID environment variable
- * Supports both JSON object format and single string format (backward compatibility)
- */
-function parseDatabaseConfig(): Record<string, string> | null {
-  const envValue = process.env.NOTION_DATABASE_ID;
-  
-  if (!envValue) {
-    return null;
-  }
-
-  // Try to parse as JSON first (new format)
-  try {
-    const parsed = JSON.parse(envValue);
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      return parsed;
-    }
-  } catch {
-    // If JSON parsing fails, treat as single database (old format)
-    // Return as object with a default key
-    return { "Default": envValue };
-  }
-
-  return null;
-}
-
-/**
- * Get the database ID to use
- * Priority: query parameter > "Finance 2026" > first database in config
- */
-function getDatabaseId(databaseConfig: Record<string, string>, databaseIdParam?: string | null): string | null {
-  // If databaseId query parameter is provided, use it
-  if (databaseIdParam) {
-    // Check if it's a database name (key) or ID (value)
-    if (databaseConfig[databaseIdParam]) {
-      return databaseConfig[databaseIdParam];
-    }
-    // Check if it's a direct ID
-    const foundEntry = Object.values(databaseConfig).find((id) => id === databaseIdParam);
-    if (foundEntry) {
-      return foundEntry;
-    }
-    // If not found in config, assume it's a direct ID
-    return databaseIdParam;
-  }
-
-  // Default to "Finance 2026" if it exists
-  if (databaseConfig["Finance 2026"]) {
-    return databaseConfig["Finance 2026"];
-  }
-
-  // Otherwise use the first database
-  const firstKey = Object.keys(databaseConfig)[0];
-  return firstKey ? databaseConfig[firstKey] : null;
-}
 
 export async function GET(request: Request) {
   // Authentication is handled by middleware
   try {
-    if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
+    if (!process.env.NOTION_API_KEY) {
       return NextResponse.json(
-        { error: "Missing required environment variables" },
+        { error: "NOTION_API_KEY environment variable is not configured" },
         { status: 500 }
       );
     }
 
-    const databaseConfig = parseDatabaseConfig();
-    if (!databaseConfig) {
+    const config = parseDataSourceConfig();
+    if (!config.ok) {
       return NextResponse.json(
-        { error: "Invalid NOTION_DATABASE_ID configuration" },
+        { error: config.error },
         { status: 500 }
       );
     }
 
-    // Get databaseId from query parameter
     const { searchParams } = new URL(request.url);
-    const databaseIdParam = searchParams.get('databaseId');
+    const selector = searchParams.get("dataSource");
+    const dataSourceId = resolveDataSourceId(config.dataSources, selector);
 
-    const databaseId = getDatabaseId(databaseConfig, databaseIdParam);
-    if (!databaseId) {
+    if (!dataSourceId) {
       return NextResponse.json(
-        { error: "No database ID found" },
-        { status: 500 }
+        { error: "Unknown Notion data source" },
+        { status: 400 }
       );
     }
-    
-    const database = await notion.databases.retrieve({
-      database_id: databaseId,
+
+    const dataSource = await notion.dataSources.retrieve({
+      data_source_id: dataSourceId,
     });
 
-    const pages = await getAllPages(databaseId);
+    if (!isFullDataSource(dataSource)) {
+      throw new Error("Notion returned a partial data source");
+    }
 
-    const response: NotionDatabaseData = {
+    const response: NotionDataSourceData = {
       schema: {
-        properties: database.properties,
+        properties: dataSource.properties,
       },
-      pages: pages,
+      pages: await getAllPages(dataSourceId),
     };
 
     return NextResponse.json(response);
@@ -116,29 +71,23 @@ export async function GET(request: Request) {
   }
 }
 
-async function getAllPages(databaseId: string) {
-  const pages = [];
+async function getAllPages(dataSourceId: string): Promise<PageObjectResponse[]> {
+  const pages: PageObjectResponse[] = [];
   let cursor: string | undefined = undefined;
 
   while (true) {
-    const queryOptions: any = {
-      database_id: databaseId,
+    const queryOptions: QueryDataSourceParameters = {
+      data_source_id: dataSourceId,
       start_cursor: cursor,
       page_size: 100,
     };
 
-    const { results, next_cursor } = await notion.databases.query(queryOptions);
-
-    // Filter to include only full PageObjects
-    const fullPages = results.filter((page): page is PageObjectResponse => 
-      'properties' in page
-    );
-    
-    pages.push(...fullPages);
+    const { results, next_cursor } = await notion.dataSources.query(queryOptions);
+    pages.push(...results.filter(isFullPage));
 
     if (!next_cursor) break;
     cursor = next_cursor;
   }
 
   return pages;
-} 
+}

@@ -1,7 +1,6 @@
 "use client";
 
-import { NotionDatabaseData } from "@/types/notion";
-import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import { NotionDataSourceData } from "@/types/notion";
 import { Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -15,7 +14,7 @@ import { shouldIncludePage, extractAmount, extractType } from "@/utils/notionFil
 ChartJS.register(ArcElement, Tooltip, Legend, Colors);
 
 interface FinancialOverviewProps {
-  data: NotionDatabaseData;
+  data: NotionDataSourceData;
   excludedTags: Set<string>;
   startDate: string | null;
   endDate: string | null;
@@ -25,15 +24,13 @@ export function FinancialOverview({ data, excludedTags, startDate, endDate }: Fi
   // Filter pages client-side and calculate financial metrics
   const metrics = data.pages
     .filter((page) => {
-      const typedPage = page as PageObjectResponse;
-      return shouldIncludePage(typedPage, excludedTags, startDate, endDate);
+      return shouldIncludePage(page, excludedTags, startDate, endDate);
     })
     .reduce((acc: any, page) => {
-      const typedPage = page as PageObjectResponse;
-      const amount = extractAmount(typedPage.properties['Amount']);
-      const type = extractType(typedPage.properties['Type']);
-      const tags = typedPage.properties['Tags']?.type === 'multi_select' 
-        ? typedPage.properties['Tags'].multi_select
+      const amount = extractAmount(page.properties['Amount']);
+      const type = extractType(page.properties['Type']);
+      const tags = page.properties['Tags']?.type === 'multi_select'
+        ? page.properties['Tags'].multi_select
         : [];
 
       // Update income and expenditure
