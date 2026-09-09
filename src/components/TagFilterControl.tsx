@@ -42,7 +42,7 @@ export function TagFilterControl({
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
         <p className="text-yellow-800">
-          ⚠️ No tags found in the database schema. Tag filtering is unavailable.
+          ⚠️ No tags found in the data source schema. Tag filtering is unavailable.
         </p>
       </div>
     );

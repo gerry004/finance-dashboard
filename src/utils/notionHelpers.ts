@@ -1,4 +1,4 @@
-import { NotionDatabaseSchema } from "@/types/notion";
+import { NotionDataSourceSchema } from "@/types/notion";
 
 export interface TagOption {
   id: string;
@@ -7,11 +7,11 @@ export interface TagOption {
 }
 
 /**
- * Extracts all available tag options from the Notion database schema
- * @param schema - The Notion database schema containing property definitions
+ * Extracts all available tag options from the Notion data source schema
+ * @param schema - The Notion data source schema containing property definitions
  * @returns Array of tag options with id, name, and color
  */
-export function extractAvailableTags(schema: NotionDatabaseSchema): TagOption[] {
+export function extractAvailableTags(schema: NotionDataSourceSchema): TagOption[] {
   // Find the Tags property in the schema
   const tagsProperty = Object.values(schema.properties).find(
     (prop) => prop.name === "Tags" && prop.type === "multi_select"
@@ -32,4 +32,3 @@ export function extractAvailableTags(schema: NotionDatabaseSchema): TagOption[] 
     color: option.color || "default",
   }));
 }
-

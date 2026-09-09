@@ -1,7 +1,6 @@
 "use client";
 
-import { NotionDatabaseData } from "@/types/notion";
-import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import { NotionDataSourceData } from "@/types/notion";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -18,7 +17,7 @@ import { shouldIncludePage, extractAmount, extractType, extractCreatedDate } fro
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 
 interface MonthlyFinancialChartProps {
-  data: NotionDatabaseData;
+  data: NotionDataSourceData;
   excludedTags: Set<string>;
   startDate: string | null;
   endDate: string | null;
@@ -38,16 +37,14 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
     // Filter pages
     const filteredPages = data.pages
       .filter((page) => {
-        const typedPage = page as PageObjectResponse;
-        return shouldIncludePage(typedPage, excludedTags, startDate, endDate);
+        return shouldIncludePage(page, excludedTags, startDate, endDate);
       })
       .map((page) => {
-        const typedPage = page as PageObjectResponse;
-        const createdDate = extractCreatedDate(typedPage);
-        const amount = extractAmount(typedPage.properties['Amount']);
-        const type = extractType(typedPage.properties['Type']);
-        const tags = typedPage.properties['Tags']?.type === 'multi_select' 
-          ? typedPage.properties['Tags'].multi_select
+        const createdDate = extractCreatedDate(page);
+        const amount = extractAmount(page.properties['Amount']);
+        const type = extractType(page.properties['Type']);
+        const tags = page.properties['Tags']?.type === 'multi_select'
+          ? page.properties['Tags'].multi_select
           : [];
 
         return {
@@ -283,4 +280,3 @@ export function MonthlyFinancialChart({ data, excludedTags, startDate, endDate, 
     </div>
   );
 }
-

@@ -2,7 +2,7 @@
  * Utility functions for filtering Notion pages
  */
 
-import { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type { PageObjectResponse } from "@notionhq/client";
 import { isDateInRange } from "./dateHelpers";
 
 /**
@@ -92,4 +92,3 @@ export function extractType(property: any): string {
     ? property.select?.name?.toLowerCase() || ''
     : '';
 }
-

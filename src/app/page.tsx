@@ -1,14 +1,14 @@
 'use client';
 
 import { Suspense } from "react";
-import { NotionDatabaseData } from "@/types/notion";
+import { NotionDataSourceData } from "@/types/notion";
 import { NotionTable } from "@/components/NotionTable";
 import { FinancialOverview } from "@/components/FinancialOverview";
 import { MonthlyFinancialChart } from "@/components/MonthlyFinancialChart";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { TagFilterControl } from "@/components/TagFilterControl";
 import { DateRangePicker } from "@/components/DateRangePicker";
-import { DatabaseSelector } from "@/components/DatabaseSelector";
+import { DataSourceSelector } from "@/components/DataSourceSelector";
 import { PasscodePrompt } from "@/components/PasscodePrompt";
 import { extractAvailableTags } from "@/utils/notionHelpers";
 import { handleUnauthorized } from "@/utils/authHelpers";
@@ -19,17 +19,17 @@ import Link from "next/link";
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const databasesInitializedRef = useRef(false);
+  const dataSourcesInitializedRef = useRef(false);
   
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [data, setData] = useState<NotionDatabaseData | null>(null);
+  const [data, setData] = useState<NotionDataSourceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [excludedTags, setExcludedTags] = useState<Set<string>>(new Set());
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [availableDatabases, setAvailableDatabases] = useState<Record<string, string>>({});
-  const [selectedDatabase, setSelectedDatabase] = useState<string>('');
+  const [availableDataSources, setAvailableDataSources] = useState<Record<string, string>>({});
+  const [selectedDataSource, setSelectedDataSource] = useState<string>('');
   const [chartFilter, setChartFilter] = useState<{ month: string; type: string } | null>(null);
 
   // Check authentication status on mount
@@ -68,13 +68,13 @@ function DashboardContent() {
     setIsAuthenticated(true);
   };
 
-  // Fetch available databases on mount
+  // Fetch available data sources on mount
   useEffect(() => {
-    if (!isAuthenticated || databasesInitializedRef.current) return;
+    if (!isAuthenticated || dataSourcesInitializedRef.current) return;
 
-    const fetchDatabases = async () => {
+    const fetchDataSources = async () => {
       try {
-        const response = await fetch('/api/notion/databases', { credentials: 'include' });
+        const response = await fetch('/api/notion/data-sources', { credentials: 'include' });
         
         if (!response.ok) {
           if (handleUnauthorized(response)) {
@@ -84,75 +84,70 @@ function DashboardContent() {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const { databases } = await response.json();
-        setAvailableDatabases(databases || {});
-        databasesInitializedRef.current = true;
+        const { dataSources } = await response.json();
+        setAvailableDataSources(dataSources || {});
+        dataSourcesInitializedRef.current = true;
         
         // Check URL params first, then set default
-        const databaseNames = Object.keys(databases || {});
-        if (databaseNames.length > 0) {
-          const urlDatabase = searchParams.get('db');
-          let databaseToSelect: string;
+        const dataSourceNames = Object.keys(dataSources || {});
+        if (dataSourceNames.length > 0) {
+          const urlDataSource = searchParams.get('dataSource');
+          let dataSourceToSelect: string;
           
-          if (urlDatabase && databaseNames.includes(urlDatabase)) {
-            // Use database from URL if it exists
-            databaseToSelect = urlDatabase;
+          if (urlDataSource && dataSourceNames.includes(urlDataSource)) {
+            dataSourceToSelect = urlDataSource;
           } else {
-            // Default to "Finance 2026" if exists, otherwise first database
-            databaseToSelect = databaseNames.includes('Finance 2026') 
+            dataSourceToSelect = dataSourceNames.includes('Finance 2026')
               ? 'Finance 2026' 
-              : databaseNames[0];
+              : dataSourceNames[0];
           }
           
-          setSelectedDatabase(databaseToSelect);
+          setSelectedDataSource(dataSourceToSelect);
           
           // Update URL if it doesn't match
-          if (urlDatabase !== databaseToSelect) {
+          if (urlDataSource !== dataSourceToSelect) {
             const params = new URLSearchParams(searchParams.toString());
-            params.set('db', databaseToSelect);
+            params.set('dataSource', dataSourceToSelect);
             router.replace(`?${params.toString()}`, { scroll: false });
           }
         }
       } catch (error) {
-        console.error('Error fetching databases:', error);
+        console.error('Error fetching data sources:', error);
         // Don't set error state here, just log it
       }
     };
 
-    fetchDatabases();
+    fetchDataSources();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   // Handle URL param changes (e.g., browser back/forward)
-  const urlDatabaseRef = useRef<string | null>(null);
+  const urlDataSourceRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!databasesInitializedRef.current || !isAuthenticated) return;
+    if (!dataSourcesInitializedRef.current || !isAuthenticated) return;
     
-    const urlDatabase = searchParams.get('db');
-    // Only process if URL database actually changed
-    if (urlDatabaseRef.current === urlDatabase) return;
-    urlDatabaseRef.current = urlDatabase;
+    const urlDataSource = searchParams.get('dataSource');
+    if (urlDataSourceRef.current === urlDataSource) return;
+    urlDataSourceRef.current = urlDataSource;
     
-    const databaseNames = Object.keys(availableDatabases);
+    const dataSourceNames = Object.keys(availableDataSources);
     
-    if (urlDatabase && databaseNames.includes(urlDatabase) && urlDatabase !== selectedDatabase) {
-      setSelectedDatabase(urlDatabase);
-      // Reset filters when switching databases
+    if (urlDataSource && dataSourceNames.includes(urlDataSource) && urlDataSource !== selectedDataSource) {
+      setSelectedDataSource(urlDataSource);
       setExcludedTags(new Set());
       setStartDate(null);
       setEndDate(null);
       setChartFilter(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, availableDatabases, isAuthenticated]);
+  }, [searchParams, availableDataSources, isAuthenticated]);
 
-  // Fetch Notion data when authenticated and database is selected
+  // Fetch Notion data when authenticated and a data source is selected
   const dataFetchRef = useRef<string>('');
   useEffect(() => {
-    if (!isAuthenticated || !selectedDatabase) return;
+    if (!isAuthenticated || !selectedDataSource) return;
     
-    // Prevent duplicate fetches for the same database
-    const fetchKey = `${selectedDatabase}-${availableDatabases[selectedDatabase] || ''}`;
+    const fetchKey = `${selectedDataSource}-${availableDataSources[selectedDataSource] || ''}`;
     if (dataFetchRef.current === fetchKey) return;
     dataFetchRef.current = fetchKey;
 
@@ -161,9 +156,9 @@ function DashboardContent() {
       setError(null);
       
       try {
-        const databaseId = availableDatabases[selectedDatabase];
-        const url = databaseId 
-          ? `/api/notion?databaseId=${encodeURIComponent(selectedDatabase)}`
+        const dataSourceId = availableDataSources[selectedDataSource];
+        const url = dataSourceId
+          ? `/api/notion?dataSource=${encodeURIComponent(selectedDataSource)}`
           : '/api/notion';
         
         const response = await fetch(url, { credentials: 'include' });
@@ -188,7 +183,7 @@ function DashboardContent() {
     };
 
     fetchData();
-  }, [isAuthenticated, selectedDatabase, availableDatabases]);
+  }, [isAuthenticated, selectedDataSource, availableDataSources]);
 
 
   // Extract available tags from schema
@@ -203,19 +198,16 @@ function DashboardContent() {
     setEndDate(newEndDate);
   };
 
-  // Handle database change
-  const handleDatabaseChange = (databaseName: string) => {
-    // Only proceed if database is actually changing
-    if (databaseName === selectedDatabase) return;
+  const handleDataSourceChange = (dataSourceName: string) => {
+    if (dataSourceName === selectedDataSource) return;
     
     // Update URL first, then state will sync via the URL effect
     const params = new URLSearchParams(searchParams.toString());
-    params.set('db', databaseName);
+    params.set('dataSource', dataSourceName);
     router.replace(`?${params.toString()}`, { scroll: false });
     
     // Update state immediately for better UX
-    setSelectedDatabase(databaseName);
-    // Reset filters when switching databases
+    setSelectedDataSource(dataSourceName);
     setExcludedTags(new Set());
     setStartDate(null);
     setEndDate(null);
@@ -244,8 +236,8 @@ function DashboardContent() {
     return <PasscodePrompt onAuthenticated={handleAuthenticated} />;
   }
 
-  // Show loading while waiting for databases to load or data to fetch
-  if (!selectedDatabase || loading) {
+  // Show loading while waiting for data sources to load or data to fetch
+  if (!selectedDataSource || loading) {
     return <LoadingSkeleton type="dashboard" />;
   }
 
@@ -284,10 +276,10 @@ function DashboardContent() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-4xl font-bold">Personal Finance Dashboard</h1>
         <div className="flex items-center gap-2">
-          <DatabaseSelector
-            databases={availableDatabases}
-            selectedDatabase={selectedDatabase}
-            onDatabaseChange={handleDatabaseChange}
+          <DataSourceSelector
+            dataSources={availableDataSources}
+            selectedDataSource={selectedDataSource}
+            onDataSourceChange={handleDataSourceChange}
             loading={loading}
           />
           <Link
