@@ -1,5 +1,4 @@
 export const BALANCE_INPUT_KEYS = [
-  "targetBalance",
   "trading212InterestToday",
   "cashbackAllTime",
   "cashbackPending",
@@ -12,7 +11,6 @@ export const BALANCE_INPUT_KEYS = [
 export type BalanceInputKey = (typeof BALANCE_INPUT_KEYS)[number];
 
 export interface BalanceInputs {
-  targetBalance: number;
   trading212InterestToday: number;
   cashbackAllTime: number;
   cashbackPending: number;
@@ -36,7 +34,7 @@ export interface BalanceResults {
   trading212InterestAdjustment: number;
   cashbackAdjustment: number;
   actualBalance: number;
-  difference: number;
+  difference: number | null;
 }
 
 export interface BalanceCalculationResponse {
@@ -45,7 +43,6 @@ export interface BalanceCalculationResponse {
 }
 
 export const DEFAULT_BALANCE_INPUTS: BalanceInputs = {
-  targetBalance: 17056.45,
   trading212InterestToday: 980.54,
   cashbackAllTime: 30.28,
   cashbackPending: 0,

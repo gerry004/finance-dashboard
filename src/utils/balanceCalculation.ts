@@ -34,10 +34,10 @@ export function parseEuroInput(value: string): number | null {
 
 export function calculateBalance(
   inputs: BalanceInputs,
-  fixedValues: BalanceFixedValues
+  fixedValues: BalanceFixedValues,
+  notionBalance: number | null
 ): BalanceResults {
   const inputCents = {
-    targetBalance: eurosToCents(inputs.targetBalance),
     trading212InterestToday: eurosToCents(inputs.trading212InterestToday),
     cashbackAllTime: eurosToCents(inputs.cashbackAllTime),
     cashbackPending: eurosToCents(inputs.cashbackPending),
@@ -87,6 +87,9 @@ export function calculateBalance(
     ),
     cashbackAdjustment: centsToEuros(cashbackAdjustment),
     actualBalance: centsToEuros(actualBalance),
-    difference: centsToEuros(inputCents.targetBalance - actualBalance),
+    difference:
+      notionBalance === null
+        ? null
+        : centsToEuros(eurosToCents(notionBalance) - actualBalance),
   };
 }

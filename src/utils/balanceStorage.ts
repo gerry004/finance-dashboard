@@ -25,13 +25,6 @@ export function getBalanceStorageKey(field: BalanceInputKey): string {
   return `${STORAGE_PREFIX}.${field}`;
 }
 
-export function hasStoredBalanceInput(
-  storage: BalanceStorage,
-  field: BalanceInputKey
-): boolean {
-  return parseStoredValue(storage.getItem(getBalanceStorageKey(field))) !== null;
-}
-
 export function loadStoredBalanceInputs(
   storage: BalanceStorage,
   defaults: BalanceInputs

@@ -23,7 +23,6 @@ import {
   parseEuroInput,
 } from "@/utils/balanceCalculation";
 import {
-  hasStoredBalanceInput,
   loadStoredBalanceInputs,
   saveStoredBalanceInput,
 } from "@/utils/balanceStorage";
@@ -234,17 +233,6 @@ export function BalanceCalculatorPage() {
         DEFAULT_BALANCE_INPUTS
       );
 
-      if (
-        result.notionTarget !== null &&
-        !hasStoredBalanceInput(window.localStorage, "targetBalance")
-      ) {
-        storedInputs.targetBalance = saveStoredBalanceInput(
-          window.localStorage,
-          "targetBalance",
-          result.notionTarget
-        );
-      }
-
       setData(result);
       setSavedInputs(storedInputs);
       setInputValues(createInputValues(storedInputs));
@@ -286,8 +274,12 @@ export function BalanceCalculatorPage() {
     if (!workingInputs) {
       return null;
     }
-    return calculateBalance(workingInputs, BALANCE_FIXED_VALUES);
-  }, [workingInputs]);
+    return calculateBalance(
+      workingInputs,
+      BALANCE_FIXED_VALUES,
+      data?.notionTarget ?? null
+    );
+  }, [data?.notionTarget, workingInputs]);
 
   const handleInputChange = (field: BalanceInputKey, value: string) => {
     setInputValues((current) =>
@@ -395,37 +387,20 @@ export function BalanceCalculatorPage() {
     );
   }
 
-  const targetMatchesNotion =
-    data.notionTarget !== null &&
-    eurosToCents(workingInputs.targetBalance) ===
-      eurosToCents(data.notionTarget);
-  const differenceIsZero = eurosToCents(results.difference) === 0;
+  const differenceIsZero =
+    results.difference !== null && eurosToCents(results.difference) === 0;
 
   return (
     <main className="container mx-auto px-4 py-8 sm:py-10">
       <DashboardNav />
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-xs font-bold uppercase text-blue-700">
-              Reconciliation
-            </p>
-            <h2 className="mt-1 text-2xl font-bold text-gray-950 sm:text-3xl">
-              Balance Calculation
-            </h2>
-          </div>
-          <button
-            type="button"
-            disabled={data.notionTarget === null || targetMatchesNotion}
-            onClick={() => {
-              if (data.notionTarget !== null) {
-                void saveField("targetBalance", data.notionTarget);
-              }
-            }}
-            className="rounded border border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Use live Notion balance
-          </button>
+        <div className="mb-6">
+          <p className="text-xs font-bold uppercase text-blue-700">
+            Reconciliation
+          </p>
+          <h2 className="mt-1 text-2xl font-bold text-gray-950 sm:text-3xl">
+            Balance Calculation
+          </h2>
         </div>
 
         {data.warnings.map((warning) => (
@@ -438,55 +413,7 @@ export function BalanceCalculatorPage() {
           </div>
         ))}
 
-        <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="min-h-32 rounded-md border border-blue-200 bg-[#d7e8f7] p-4">
-            <label
-              htmlFor="balance-input-targetBalance"
-              className="text-xs font-bold uppercase text-blue-800"
-            >
-              Saved Target
-            </label>
-            <div className="mt-3 flex items-center rounded border border-blue-300 bg-white px-2 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-200">
-              <span aria-hidden="true" className="text-gray-500">
-                €
-              </span>
-              <input
-                id="balance-input-targetBalance"
-                type="text"
-                inputMode="decimal"
-                value={inputValues.targetBalance}
-                onChange={(event) =>
-                  handleInputChange("targetBalance", event.target.value)
-                }
-                onBlur={() => void saveField("targetBalance")}
-                disabled={saveStates.targetBalance.status === "saving"}
-                aria-invalid={saveStates.targetBalance.status === "error"}
-                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-right text-xl font-bold tabular-nums text-gray-950 outline-none disabled:cursor-wait"
-              />
-            </div>
-            <p
-              aria-live="polite"
-              className={`mt-2 h-4 text-xs ${
-                saveStates.targetBalance.status === "error"
-                  ? "text-red-700"
-                  : "text-blue-800"
-              }`}
-            >
-              {saveStates.targetBalance.status === "saving" ? "Saving..." : null}
-              {saveStates.targetBalance.status === "saved" ? "Saved" : null}
-              {saveStates.targetBalance.status === "error" ? (
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => void saveField("targetBalance")}
-                  className="font-semibold underline underline-offset-2"
-                >
-                  {saveStates.targetBalance.message} - retry
-                </button>
-              ) : null}
-            </p>
-          </div>
-
+        <section className="mb-6 grid gap-3 sm:grid-cols-3">
           <div className="min-h-32 rounded-md border border-amber-200 bg-amber-50 p-4">
             <p className="text-xs font-bold uppercase text-amber-800">
               Live Notion Balance
@@ -495,13 +422,6 @@ export function BalanceCalculatorPage() {
               {data.notionTarget === null
                 ? "Unavailable"
                 : formatEuro(data.notionTarget)}
-            </p>
-            <p className="mt-2 text-xs text-amber-900">
-              {data.notionTarget === null
-                ? "Comparison unavailable"
-                : targetMatchesNotion
-                  ? "Target is in sync"
-                  : "Target differs from Notion"}
             </p>
           </div>
 
@@ -516,27 +436,43 @@ export function BalanceCalculatorPage() {
 
           <div
             className={`min-h-32 rounded-md border p-4 ${
-              differenceIsZero
+              results.difference === null
+                ? "border-gray-200 bg-gray-50"
+                : differenceIsZero
                 ? "border-green-200 bg-green-50"
                 : "border-red-200 bg-red-50"
             }`}
           >
             <p
               className={`text-xs font-bold uppercase ${
-                differenceIsZero ? "text-green-800" : "text-red-800"
+                results.difference === null
+                  ? "text-gray-600"
+                  : differenceIsZero
+                    ? "text-green-800"
+                    : "text-red-800"
               }`}
             >
               Difference
             </p>
             <p className="mt-4 text-2xl font-bold tabular-nums text-gray-950">
-              {formatEuro(results.difference)}
+              {results.difference === null
+                ? "Unavailable"
+                : formatEuro(results.difference)}
             </p>
             <p
               className={`mt-2 text-xs ${
-                differenceIsZero ? "text-green-800" : "text-red-800"
+                results.difference === null
+                  ? "text-gray-600"
+                  : differenceIsZero
+                    ? "text-green-800"
+                    : "text-red-800"
               }`}
             >
-              {differenceIsZero ? "Balances match" : "Reconciliation required"}
+              {results.difference === null
+                ? "Comparison unavailable"
+                : differenceIsZero
+                  ? "Balances match"
+                  : "Reconciliation required"}
             </p>
           </div>
         </section>

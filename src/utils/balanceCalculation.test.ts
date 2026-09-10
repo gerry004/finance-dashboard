@@ -14,7 +14,7 @@ const fixedValues = BALANCE_FIXED_VALUES;
 
 describe("calculateBalance", () => {
   it("reproduces the built-in fixture exactly", () => {
-    expect(calculateBalance(inputs, fixedValues)).toEqual({
+    expect(calculateBalance(inputs, fixedValues, 17056.45)).toEqual({
       trading212InterestThisYear: 215.1,
       cashbackUninvested: 12.92,
       cashbackReceived: 12.92,
@@ -29,7 +29,8 @@ describe("calculateBalance", () => {
   it("subtracts pending cashback from the received adjustment", () => {
     const result = calculateBalance(
       { ...inputs, cashbackPending: 5 },
-      fixedValues
+      fixedValues,
+      17056.45
     );
 
     expect(result.cashbackReceived).toBe(7.92);
@@ -40,8 +41,16 @@ describe("calculateBalance", () => {
   it("supports negative balances and normalizes decimal precision", () => {
     expect(normalizeEuroValue(-1.005)).toBe(-1.01);
     expect(
-      calculateBalance({ ...inputs, cash: -20.004 }, fixedValues).actualBalance
+      calculateBalance(
+        { ...inputs, cash: -20.004 },
+        fixedValues,
+        17056.45
+      ).actualBalance
     ).toBe(16867.7);
+  });
+
+  it("leaves the difference unavailable without a live Notion balance", () => {
+    expect(calculateBalance(inputs, fixedValues, null).difference).toBeNull();
   });
 });
 
