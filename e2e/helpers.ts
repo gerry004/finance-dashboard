@@ -50,6 +50,10 @@ export async function mockAppApis(
       return json(route, notionFixtures[source] ?? notionFixtures["Finance 2026"]);
     }
 
+    if (path === "/api/balance-calculation") {
+      return json(route, { notionTarget: 17000.37, warnings: [] });
+    }
+
     if (path === "/api/trading212") {
       return json(route, { data: trading212Positions });
     }
