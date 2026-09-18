@@ -51,7 +51,15 @@ export async function mockAppApis(
     }
 
     if (path === "/api/balance-calculation") {
-      return json(route, { notionTarget: 17000.37, warnings: [] });
+      return json(route, {
+        notionTarget: 17000.37,
+        trading212: {
+          cash: 16080,
+          currency: "EUR",
+          warnings: [],
+        },
+        warnings: [],
+      });
     }
 
     if (path === "/api/trading212") {

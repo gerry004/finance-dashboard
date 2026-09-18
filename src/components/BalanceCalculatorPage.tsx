@@ -23,7 +23,9 @@ import {
   parseEuroInput,
 } from "@/utils/balanceCalculation";
 import {
+  hasStoredBalanceInput,
   loadStoredBalanceInputs,
+  removeStoredBalanceInput,
   saveStoredBalanceInput,
 } from "@/utils/balanceStorage";
 import { handleUnauthorized } from "@/utils/authHelpers";
@@ -40,6 +42,12 @@ interface EditableAmountRowProps {
   label: string;
   value: string;
   saveState: FieldSaveState;
+  hint?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+  };
   onChange: (field: BalanceInputKey, value: string) => void;
   onSave: (field: BalanceInputKey) => void;
 }
@@ -82,6 +90,8 @@ function EditableAmountRow({
   label,
   value,
   saveState,
+  hint,
+  action,
   onChange,
   onSave,
 }: EditableAmountRowProps) {
@@ -128,6 +138,22 @@ function EditableAmountRow({
             </button>
           ) : null}
         </div>
+        {(hint || action) && (
+          <div className="mt-1 flex min-h-6 flex-wrap items-center justify-end gap-2 text-right text-xs text-gray-600">
+            {hint ? <span>{hint}</span> : null}
+            {action ? (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={action.onClick}
+                disabled={action.disabled}
+                className="font-semibold text-blue-700 underline underline-offset-2 disabled:cursor-not-allowed disabled:text-gray-400"
+              >
+                {action.label}
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -174,6 +200,10 @@ export function BalanceCalculatorPage() {
   const [inputValues, setInputValues] = useState<
     Record<BalanceInputKey, string> | null
   >(null);
+  const [
+    trading212CashUsesManualOverride,
+    setTrading212CashUsesManualOverride,
+  ] = useState(false);
   const [saveStates, setSaveStates] = useState(createSaveStates);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -232,10 +262,22 @@ export function BalanceCalculatorPage() {
         window.localStorage,
         DEFAULT_BALANCE_INPUTS
       );
+      const hasTrading212CashOverride = hasStoredBalanceInput(
+        window.localStorage,
+        "trading212Cash"
+      );
+      const initialInputs = { ...storedInputs };
+      if (
+        !hasTrading212CashOverride &&
+        typeof result.trading212?.cash === "number"
+      ) {
+        initialInputs.trading212Cash = result.trading212.cash;
+      }
 
       setData(result);
-      setSavedInputs(storedInputs);
-      setInputValues(createInputValues(storedInputs));
+      setSavedInputs(initialInputs);
+      setInputValues(createInputValues(initialInputs));
+      setTrading212CashUsesManualOverride(hasTrading212CashOverride);
       setSaveStates(createSaveStates());
     } catch (loadError) {
       console.error("Error loading balance calculation:", loadError);
@@ -342,6 +384,9 @@ export function BalanceCalculatorPage() {
           ...current,
           [field]: { status: "saved" },
         }));
+        if (field === "trading212Cash") {
+          setTrading212CashUsesManualOverride(true);
+        }
       } catch (saveError) {
         console.error(`Error saving ${field}:`, saveError);
         setSaveStates((current) => ({
@@ -355,6 +400,40 @@ export function BalanceCalculatorPage() {
     },
     [inputValues, savedInputs]
   );
+
+  const trading212LiveCash = data?.trading212?.cash;
+
+  const useTrading212Cash = useCallback(() => {
+    if (typeof trading212LiveCash !== "number") {
+      return;
+    }
+
+    try {
+      removeStoredBalanceInput(window.localStorage, "trading212Cash");
+      setSavedInputs((current) =>
+        current ? { ...current, trading212Cash: trading212LiveCash } : current
+      );
+      setInputValues((current) =>
+        current
+          ? { ...current, trading212Cash: formatInput(trading212LiveCash) }
+          : current
+      );
+      setTrading212CashUsesManualOverride(false);
+      setSaveStates((current) => ({
+        ...current,
+        trading212Cash: { status: "saved" },
+      }));
+    } catch (storageError) {
+      console.error("Error clearing Trading 212 cash override:", storageError);
+      setSaveStates((current) => ({
+        ...current,
+        trading212Cash: {
+          status: "error",
+          message: "Browser storage failed - retry",
+        },
+      }));
+    }
+  }, [trading212LiveCash]);
 
   if (isAuthenticated === null) {
     return <LoadingSkeleton type="dashboard" />;
@@ -404,6 +483,16 @@ export function BalanceCalculatorPage() {
         </div>
 
         {data.warnings.map((warning) => (
+          <div
+            key={warning}
+            role="status"
+            className="mb-4 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            {warning}
+          </div>
+        ))}
+
+        {data.trading212?.warnings.map((warning) => (
           <div
             key={warning}
             role="status"
@@ -579,6 +668,22 @@ export function BalanceCalculatorPage() {
               label="Trading 212 - Cash"
               value={inputValues.trading212Cash}
               saveState={saveStates.trading212Cash}
+              hint={
+                typeof data.trading212?.cash === "number"
+                  ? trading212CashUsesManualOverride
+                    ? `Manual value saved. Live Trading 212 cash: ${formatEuro(data.trading212.cash)}.`
+                    : `Using live Trading 212 cash (${data.trading212.currency}).`
+                  : "Trading 212 cash unavailable; manual value in use."
+              }
+              action={
+                typeof data.trading212?.cash === "number" &&
+                trading212CashUsesManualOverride
+                  ? {
+                      label: "Use Trading 212 cash",
+                      onClick: useTrading212Cash,
+                    }
+                  : undefined
+              }
               onChange={handleInputChange}
               onSave={(field) => void saveField(field)}
             />
