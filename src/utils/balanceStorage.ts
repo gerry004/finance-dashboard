@@ -10,6 +10,7 @@ const STORAGE_PREFIX = "finance-dashboard.balance-calculation.v1";
 export interface BalanceStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
 }
 
 function parseStoredValue(value: string | null): number | null {
@@ -43,6 +44,13 @@ export function loadStoredBalanceInputs(
   return inputs;
 }
 
+export function hasStoredBalanceInput(
+  storage: BalanceStorage,
+  field: BalanceInputKey
+): boolean {
+  return parseStoredValue(storage.getItem(getBalanceStorageKey(field))) !== null;
+}
+
 export function saveStoredBalanceInput(
   storage: BalanceStorage,
   field: BalanceInputKey,
@@ -51,4 +59,17 @@ export function saveStoredBalanceInput(
   const normalizedValue = normalizeEuroValue(value);
   storage.setItem(getBalanceStorageKey(field), String(normalizedValue));
   return normalizedValue;
+}
+
+export function removeStoredBalanceInput(
+  storage: BalanceStorage,
+  field: BalanceInputKey
+): void {
+  const key = getBalanceStorageKey(field);
+  if (storage.removeItem) {
+    storage.removeItem(key);
+    return;
+  }
+
+  storage.setItem(key, "");
 }

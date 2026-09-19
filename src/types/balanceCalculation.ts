@@ -39,6 +39,11 @@ export interface BalanceResults {
 
 export interface BalanceCalculationResponse {
   notionTarget: number | null;
+  trading212?: {
+    cash: number | null;
+    currency: string | null;
+    warnings: string[];
+  };
   warnings: string[];
 }
 

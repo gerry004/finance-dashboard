@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_BALANCE_INPUTS } from "../types/balanceCalculation";
 import {
   getBalanceStorageKey,
+  hasStoredBalanceInput,
   loadStoredBalanceInputs,
+  removeStoredBalanceInput,
   saveStoredBalanceInput,
   type BalanceStorage,
 } from "./balanceStorage";
@@ -39,8 +41,19 @@ describe("balance storage", () => {
     const storage = createStorage();
 
     expect(saveStoredBalanceInput(storage, "cash", -1.005)).toBe(-1.01);
-    expect(loadStoredBalanceInputs(storage, DEFAULT_BALANCE_INPUTS).cash).toBe(
+      expect(loadStoredBalanceInputs(storage, DEFAULT_BALANCE_INPUTS).cash).toBe(
       -1.01
     );
+  });
+
+  it("detects and clears saved values", () => {
+    const storage = createStorage();
+
+    expect(hasStoredBalanceInput(storage, "trading212Cash")).toBe(false);
+    saveStoredBalanceInput(storage, "trading212Cash", 12.34);
+    expect(hasStoredBalanceInput(storage, "trading212Cash")).toBe(true);
+
+    removeStoredBalanceInput(storage, "trading212Cash");
+    expect(hasStoredBalanceInput(storage, "trading212Cash")).toBe(false);
   });
 });
