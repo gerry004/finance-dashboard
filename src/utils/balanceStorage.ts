@@ -6,10 +6,6 @@ import {
 import { normalizeEuroValue } from "./balanceCalculation";
 
 const STORAGE_PREFIX = "finance-dashboard.balance-calculation.v1";
-const LEGACY_LIVE_FIELDS = [
-  "trading212Cash",
-  "trading212InterestToday",
-] as const;
 
 export interface BalanceStorage {
   getItem(key: string): string | null;
@@ -76,15 +72,4 @@ export function removeStoredBalanceInput(
   }
 
   storage.setItem(key, "");
-}
-
-export function removeLegacyLiveBalanceInputs(storage: BalanceStorage): void {
-  for (const field of LEGACY_LIVE_FIELDS) {
-    const key = `${STORAGE_PREFIX}.${field}`;
-    if (storage.removeItem) {
-      storage.removeItem(key);
-    } else {
-      storage.setItem(key, "");
-    }
-  }
 }

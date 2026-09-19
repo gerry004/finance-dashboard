@@ -1,7 +1,6 @@
 import type {
   BalanceFixedValues,
   BalanceInputs,
-  BalanceLiveValues,
   BalanceResults,
 } from "@/types/balanceCalculation";
 
@@ -36,60 +35,61 @@ export function parseEuroInput(value: string): number | null {
 export function calculateBalance(
   inputs: BalanceInputs,
   fixedValues: BalanceFixedValues,
-  liveValues: BalanceLiveValues,
   notionBalance: number | null
 ): BalanceResults {
   const inputCents = {
+    trading212InterestToday: eurosToCents(inputs.trading212InterestToday),
     cashbackAllTime: eurosToCents(inputs.cashbackAllTime),
     cashbackPending: eurosToCents(inputs.cashbackPending),
     revolutFlexibleToday: eurosToCents(inputs.revolutFlexibleToday),
     cash: eurosToCents(inputs.cash),
     revolutCash: eurosToCents(inputs.revolutCash),
+    trading212Cash: eurosToCents(inputs.trading212Cash),
   };
   const fixedCents = {
+    trading212InterestOpening: eurosToCents(
+      fixedValues.trading212InterestOpening
+    ),
     cashbackInvested: eurosToCents(fixedValues.cashbackInvested),
     revolutFlexibleOpening: eurosToCents(
       fixedValues.revolutFlexibleOpening
     ),
   };
 
-  const trading212InterestThisYear = liveValues.trading212InterestThisYear;
+  const trading212InterestThisYear =
+    inputCents.trading212InterestToday -
+    fixedCents.trading212InterestOpening;
   const cashbackUninvested =
     inputCents.cashbackAllTime - fixedCents.cashbackInvested;
   const cashbackReceived =
     cashbackUninvested - inputCents.cashbackPending;
   const revolutFlexibleThisYear =
     inputCents.revolutFlexibleToday - fixedCents.revolutFlexibleOpening;
-  const trading212InterestAdjustment =
-    trading212InterestThisYear === null
-      ? null
-      : centsToEuros(-eurosToCents(trading212InterestThisYear));
+  const trading212InterestAdjustment = -trading212InterestThisYear;
   const cashbackAdjustment = -cashbackReceived;
   const actualBalance =
-    liveValues.trading212Cash === null || trading212InterestAdjustment === null
-      ? null
-      : centsToEuros(
-          inputCents.cash +
-            inputCents.revolutCash +
-            fixedCents.revolutFlexibleOpening +
-            eurosToCents(liveValues.trading212Cash) +
-            eurosToCents(trading212InterestAdjustment) +
-            cashbackAdjustment
-        );
+    inputCents.cash +
+    inputCents.revolutCash +
+    fixedCents.revolutFlexibleOpening +
+    inputCents.trading212Cash +
+    trading212InterestAdjustment +
+    cashbackAdjustment;
 
   return {
-    trading212InterestThisYear,
+    trading212InterestThisYear: centsToEuros(
+      trading212InterestThisYear
+    ),
     cashbackUninvested: centsToEuros(cashbackUninvested),
     cashbackReceived: centsToEuros(cashbackReceived),
     revolutFlexibleThisYear: centsToEuros(revolutFlexibleThisYear),
-    trading212InterestAdjustment,
+    trading212InterestAdjustment: centsToEuros(
+      trading212InterestAdjustment
+    ),
     cashbackAdjustment: centsToEuros(cashbackAdjustment),
-    actualBalance,
+    actualBalance: centsToEuros(actualBalance),
     difference:
-      notionBalance === null || actualBalance === null
+      notionBalance === null
         ? null
-        : centsToEuros(
-            eurosToCents(notionBalance) - eurosToCents(actualBalance)
-          ),
+        : centsToEuros(eurosToCents(notionBalance) - actualBalance),
   };
 }

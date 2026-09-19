@@ -16,7 +16,6 @@ import {
   type BalanceCalculationResponse,
   type BalanceInputKey,
   type BalanceInputs,
-  type Trading212InterestResponse,
 } from "@/types/balanceCalculation";
 import {
   calculateBalance,
@@ -24,8 +23,9 @@ import {
   parseEuroInput,
 } from "@/utils/balanceCalculation";
 import {
+  hasStoredBalanceInput,
   loadStoredBalanceInputs,
-  removeLegacyLiveBalanceInputs,
+  removeStoredBalanceInput,
   saveStoredBalanceInput,
 } from "@/utils/balanceStorage";
 import { handleUnauthorized } from "@/utils/authHelpers";
@@ -54,10 +54,8 @@ interface EditableAmountRowProps {
 
 interface ReadOnlyAmountRowProps {
   label: string;
-  value: number | null;
+  value: number;
   emphasized?: boolean;
-  hint?: string;
-  unavailableLabel?: string;
 }
 
 const euroFormatter = new Intl.NumberFormat("en-IE", {
@@ -165,8 +163,6 @@ function ReadOnlyAmountRow({
   label,
   value,
   emphasized = false,
-  hint,
-  unavailableLabel = "Unavailable",
 }: ReadOnlyAmountRowProps) {
   return (
     <div
@@ -174,17 +170,8 @@ function ReadOnlyAmountRow({
         emphasized ? "bg-gray-100 font-bold text-gray-950" : "bg-white text-gray-700"
       }`}
     >
-      <dt className="min-w-0 text-sm">
-        {label}
-        {hint ? (
-          <span className="mt-1 block text-xs font-normal text-gray-500">
-            {hint}
-          </span>
-        ) : null}
-      </dt>
-      <dd className="text-right text-sm tabular-nums">
-        {value === null ? unavailableLabel : formatEuro(value)}
-      </dd>
+      <dt className="min-w-0 text-sm">{label}</dt>
+      <dd className="text-right text-sm tabular-nums">{formatEuro(value)}</dd>
     </div>
   );
 }
@@ -209,15 +196,16 @@ function CalculatorSection({
 export function BalanceCalculatorPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [data, setData] = useState<BalanceCalculationResponse | null>(null);
-  const [interestData, setInterestData] =
-    useState<Trading212InterestResponse | null>(null);
   const [savedInputs, setSavedInputs] = useState<BalanceInputs | null>(null);
   const [inputValues, setInputValues] = useState<
     Record<BalanceInputKey, string> | null
   >(null);
+  const [
+    trading212CashUsesManualOverride,
+    setTrading212CashUsesManualOverride,
+  ] = useState(false);
   const [saveStates, setSaveStates] = useState(createSaveStates);
   const [loading, setLoading] = useState(true);
-  const [interestLoading, setInterestLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -270,15 +258,26 @@ export function BalanceCalculatorPage() {
       }
 
       const result = (await response.json()) as BalanceCalculationResponse;
-      removeLegacyLiveBalanceInputs(window.localStorage);
       const storedInputs = loadStoredBalanceInputs(
         window.localStorage,
         DEFAULT_BALANCE_INPUTS
       );
+      const hasTrading212CashOverride = hasStoredBalanceInput(
+        window.localStorage,
+        "trading212Cash"
+      );
+      const initialInputs = { ...storedInputs };
+      if (
+        !hasTrading212CashOverride &&
+        typeof result.trading212?.cash === "number"
+      ) {
+        initialInputs.trading212Cash = result.trading212.cash;
+      }
 
       setData(result);
-      setSavedInputs(storedInputs);
-      setInputValues(createInputValues(storedInputs));
+      setSavedInputs(initialInputs);
+      setInputValues(createInputValues(initialInputs));
+      setTrading212CashUsesManualOverride(hasTrading212CashOverride);
       setSaveStates(createSaveStates());
     } catch (loadError) {
       console.error("Error loading balance calculation:", loadError);
@@ -292,43 +291,11 @@ export function BalanceCalculatorPage() {
     }
   }, []);
 
-  const loadInterest = useCallback(async () => {
-    setInterestLoading(true);
-    setInterestData(null);
-
-    try {
-      const response = await fetch("/api/trading212/interest", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        if (handleUnauthorized(response)) {
-          setIsAuthenticated(false);
-          return;
-        }
-        throw new Error("Failed to load Trading 212 interest");
-      }
-      setInterestData((await response.json()) as Trading212InterestResponse);
-    } catch (interestError) {
-      console.error("Error loading Trading 212 interest:", interestError);
-      setInterestData({
-        interestThisYear: null,
-        currency: null,
-        status: "unavailable",
-        asOf: null,
-        warnings: ["Trading 212 interest history is currently unavailable."],
-      });
-    } finally {
-      setInterestLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (isAuthenticated) {
       void loadCalculation();
-      void loadInterest();
     }
-  }, [isAuthenticated, loadCalculation, loadInterest]);
+  }, [isAuthenticated, loadCalculation]);
 
   const workingInputs = useMemo(() => {
     if (!savedInputs || !inputValues) {
@@ -352,14 +319,9 @@ export function BalanceCalculatorPage() {
     return calculateBalance(
       workingInputs,
       BALANCE_FIXED_VALUES,
-      {
-        trading212Cash: data?.trading212?.cash ?? null,
-        trading212InterestThisYear:
-          interestData?.interestThisYear ?? null,
-      },
       data?.notionTarget ?? null
     );
-  }, [data?.notionTarget, data?.trading212?.cash, interestData, workingInputs]);
+  }, [data?.notionTarget, workingInputs]);
 
   const handleInputChange = (field: BalanceInputKey, value: string) => {
     setInputValues((current) =>
@@ -422,6 +384,9 @@ export function BalanceCalculatorPage() {
           ...current,
           [field]: { status: "saved" },
         }));
+        if (field === "trading212Cash") {
+          setTrading212CashUsesManualOverride(true);
+        }
       } catch (saveError) {
         console.error(`Error saving ${field}:`, saveError);
         setSaveStates((current) => ({
@@ -435,6 +400,40 @@ export function BalanceCalculatorPage() {
     },
     [inputValues, savedInputs]
   );
+
+  const trading212LiveCash = data?.trading212?.cash;
+
+  const useTrading212Cash = useCallback(() => {
+    if (typeof trading212LiveCash !== "number") {
+      return;
+    }
+
+    try {
+      removeStoredBalanceInput(window.localStorage, "trading212Cash");
+      setSavedInputs((current) =>
+        current ? { ...current, trading212Cash: trading212LiveCash } : current
+      );
+      setInputValues((current) =>
+        current
+          ? { ...current, trading212Cash: formatInput(trading212LiveCash) }
+          : current
+      );
+      setTrading212CashUsesManualOverride(false);
+      setSaveStates((current) => ({
+        ...current,
+        trading212Cash: { status: "saved" },
+      }));
+    } catch (storageError) {
+      console.error("Error clearing Trading 212 cash override:", storageError);
+      setSaveStates((current) => ({
+        ...current,
+        trading212Cash: {
+          status: "error",
+          message: "Browser storage failed - retry",
+        },
+      }));
+    }
+  }, [trading212LiveCash]);
 
   if (isAuthenticated === null) {
     return <LoadingSkeleton type="dashboard" />;
@@ -503,16 +502,6 @@ export function BalanceCalculatorPage() {
           </div>
         ))}
 
-        {interestData?.warnings.map((warning) => (
-          <div
-            key={warning}
-            role="status"
-            className="mb-4 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900"
-          >
-            {warning}
-          </div>
-        ))}
-
         <section className="mb-6 grid gap-3 sm:grid-cols-3">
           <div className="min-h-32 rounded-md border border-amber-200 bg-amber-50 p-4">
             <p className="text-xs font-bold uppercase text-amber-800">
@@ -530,9 +519,7 @@ export function BalanceCalculatorPage() {
               Calculated Actual
             </p>
             <p className="mt-4 text-2xl font-bold tabular-nums text-gray-950">
-              {results.actualBalance === null
-                ? "Unavailable"
-                : formatEuro(results.actualBalance)}
+              {formatEuro(results.actualBalance)}
             </p>
           </div>
 
@@ -583,27 +570,25 @@ export function BalanceCalculatorPage() {
           <div className="space-y-5">
             <CalculatorSection title="Trading 212 - Interest on Cash">
               <ReadOnlyAmountRow
+                label="Jan 1st"
+                value={BALANCE_FIXED_VALUES.trading212InterestOpening}
+              />
+              <EditableAmountRow
+                field="trading212InterestToday"
+                label="Today"
+                value={inputValues.trading212InterestToday}
+                saveState={saveStates.trading212InterestToday}
+                onChange={handleInputChange}
+                onSave={(field) => void saveField(field)}
+              />
+              <ReadOnlyAmountRow
                 label="This Year"
                 value={results.trading212InterestThisYear}
-                unavailableLabel={
-                  interestLoading ? "Synchronizing..." : "Unavailable"
-                }
-                hint={
-                  interestLoading
-                    ? "Reading calendar-year transactions from Trading 212."
-                    : interestData?.status === "synchronized"
-                      ? "Live calendar-year total from Trading 212."
-                      : "Live interest history is unavailable."
-                }
                 emphasized
               />
             </CalculatorSection>
 
             <CalculatorSection title="Trading 212 - Cashback">
-              <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-                Cashback remains manual because Trading 212 does not expose its
-                cashback breakdown through the public API.
-              </div>
               <EditableAmountRow
                 field="cashbackAllTime"
                 label="All Time"
@@ -678,14 +663,29 @@ export function BalanceCalculatorPage() {
               label="Revolut - Flexible Cash Funds"
               value={BALANCE_FIXED_VALUES.revolutFlexibleOpening}
             />
-            <ReadOnlyAmountRow
+            <EditableAmountRow
+              field="trading212Cash"
               label="Trading 212 - Cash"
-              value={data.trading212?.cash ?? null}
+              value={inputValues.trading212Cash}
+              saveState={saveStates.trading212Cash}
               hint={
                 typeof data.trading212?.cash === "number"
-                  ? `Live Trading 212 cash (${data.trading212.currency}).`
-                  : "Live Trading 212 cash is unavailable."
+                  ? trading212CashUsesManualOverride
+                    ? `Manual value saved. Live Trading 212 cash: ${formatEuro(data.trading212.cash)}.`
+                    : `Using live Trading 212 cash (${data.trading212.currency}).`
+                  : "Trading 212 cash unavailable; manual value in use."
               }
+              action={
+                typeof data.trading212?.cash === "number" &&
+                trading212CashUsesManualOverride
+                  ? {
+                      label: "Use Trading 212 cash",
+                      onClick: useTrading212Cash,
+                    }
+                  : undefined
+              }
+              onChange={handleInputChange}
+              onSave={(field) => void saveField(field)}
             />
             <ReadOnlyAmountRow
               label="Trading 212 - Interest on Cash"
