@@ -2,7 +2,28 @@ import { describe, expect, it } from "vitest";
 import { deriveTrading212BalanceSnapshot } from "./trading212Balance";
 
 describe("deriveTrading212BalanceSnapshot", () => {
-  it("sums available, pie, and reserved cash fields", () => {
+  it("uses total value minus investments current value for cash", () => {
+    expect(
+      deriveTrading212BalanceSnapshot({
+        currency: "EUR",
+        totalValue: 20000.57,
+        investments: {
+          currentValue: 3805.87,
+        },
+        cash: {
+          availableToTrade: 16000,
+          inPies: 100,
+          reservedForOrders: 83.84,
+        },
+      })
+    ).toEqual({
+      cash: 16194.7,
+      currency: "EUR",
+      warnings: [],
+    });
+  });
+
+  it("falls back to summing available, pie, and reserved cash fields", () => {
     expect(
       deriveTrading212BalanceSnapshot({
         currency: "EUR",

@@ -45,6 +45,14 @@ function readFiniteNumber(
   return null;
 }
 
+function readOptionalFiniteNumber(
+  record: Record<string, unknown>,
+  key: string
+): number | null {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 export function deriveTrading212BalanceSnapshot(
   accountSummary: unknown
 ): Trading212BalanceSnapshot {
@@ -81,6 +89,23 @@ export function deriveTrading212BalanceSnapshot(
       currency,
       warnings: ["Trading 212 cash summary is unavailable."],
     };
+  }
+
+  const totalValue = readOptionalFiniteNumber(accountSummary, "totalValue");
+  const investments = accountSummary.investments;
+  if (isRecord(investments)) {
+    const investmentsCurrentValue = readOptionalFiniteNumber(
+      investments,
+      "currentValue"
+    );
+
+    if (totalValue !== null && investmentsCurrentValue !== null) {
+      return {
+        cash: normalizeEuroValue(totalValue - investmentsCurrentValue),
+        currency,
+        warnings,
+      };
+    }
   }
 
   const availableToTrade = readFiniteNumber(
