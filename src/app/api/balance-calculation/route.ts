@@ -11,12 +11,19 @@ const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
 export async function GET() {
   const warnings: string[] = [];
   let notionTarget: number | null = null;
-  const trading212 = await fetchTrading212BalanceSnapshot();
+  const [trading212, notionResult] = await Promise.all([
+    fetchTrading212BalanceSnapshot(),
+    fetchLiveNotionBalance()
+      .then((value) => ({ value, error: null }))
+      .catch((error: unknown) => ({ value: null, error })),
+  ]);
 
-  try {
-    notionTarget = await fetchLiveNotionBalance();
-  } catch (error) {
-    console.error("Error calculating live Notion balance:", error);
+  notionTarget = notionResult.value;
+  if (notionResult.error) {
+    console.error(
+      "Error calculating live Notion balance:",
+      notionResult.error
+    );
     warnings.push("Live Notion balance is currently unavailable.");
   }
 

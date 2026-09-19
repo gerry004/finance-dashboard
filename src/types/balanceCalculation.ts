@@ -1,39 +1,39 @@
 export const BALANCE_INPUT_KEYS = [
-  "trading212InterestToday",
   "cashbackAllTime",
   "cashbackPending",
   "revolutFlexibleToday",
   "cash",
   "revolutCash",
-  "trading212Cash",
 ] as const;
 
 export type BalanceInputKey = (typeof BALANCE_INPUT_KEYS)[number];
 
 export interface BalanceInputs {
-  trading212InterestToday: number;
   cashbackAllTime: number;
   cashbackPending: number;
   revolutFlexibleToday: number;
   cash: number;
   revolutCash: number;
-  trading212Cash: number;
 }
 
 export interface BalanceFixedValues {
-  trading212InterestOpening: number;
   cashbackInvested: number;
   revolutFlexibleOpening: number;
 }
 
+export interface BalanceLiveValues {
+  trading212Cash: number | null;
+  trading212InterestThisYear: number | null;
+}
+
 export interface BalanceResults {
-  trading212InterestThisYear: number;
+  trading212InterestThisYear: number | null;
   cashbackUninvested: number;
   cashbackReceived: number;
   revolutFlexibleThisYear: number;
-  trading212InterestAdjustment: number;
+  trading212InterestAdjustment: number | null;
   cashbackAdjustment: number;
-  actualBalance: number;
+  actualBalance: number | null;
   difference: number | null;
 }
 
@@ -47,18 +47,23 @@ export interface BalanceCalculationResponse {
   warnings: string[];
 }
 
+export interface Trading212InterestResponse {
+  interestThisYear: number | null;
+  currency: string | null;
+  status: "synchronized" | "unavailable";
+  asOf: string | null;
+  warnings: string[];
+}
+
 export const DEFAULT_BALANCE_INPUTS: BalanceInputs = {
-  trading212InterestToday: 980.54,
   cashbackAllTime: 30.28,
   cashbackPending: 0,
   revolutFlexibleToday: 1005.74,
   cash: 168.75,
   revolutCash: 49.63,
-  trading212Cash: 16066.93,
 };
 
 export const BALANCE_FIXED_VALUES: BalanceFixedValues = {
-  trading212InterestOpening: 765.44,
   cashbackInvested: 17.36,
   revolutFlexibleOpening: 999.16,
 };

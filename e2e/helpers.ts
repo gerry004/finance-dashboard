@@ -62,6 +62,16 @@ export async function mockAppApis(
       });
     }
 
+    if (path === "/api/trading212/interest") {
+      return json(route, {
+        interestThisYear: 215.1,
+        currency: "EUR",
+        status: "synchronized",
+        asOf: "2026-09-19T12:00:00.000Z",
+        warnings: [],
+      });
+    }
+
     if (path === "/api/trading212") {
       return json(route, { data: trading212Positions });
     }

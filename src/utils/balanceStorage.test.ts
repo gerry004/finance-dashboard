@@ -4,6 +4,7 @@ import {
   getBalanceStorageKey,
   hasStoredBalanceInput,
   loadStoredBalanceInputs,
+  removeLegacyLiveBalanceInputs,
   removeStoredBalanceInput,
   saveStoredBalanceInput,
   type BalanceStorage,
@@ -15,6 +16,7 @@ function createStorage(initial: Record<string, string> = {}): BalanceStorage {
   return {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
   };
 }
 
@@ -49,11 +51,26 @@ describe("balance storage", () => {
   it("detects and clears saved values", () => {
     const storage = createStorage();
 
-    expect(hasStoredBalanceInput(storage, "trading212Cash")).toBe(false);
-    saveStoredBalanceInput(storage, "trading212Cash", 12.34);
-    expect(hasStoredBalanceInput(storage, "trading212Cash")).toBe(true);
+    expect(hasStoredBalanceInput(storage, "cashbackPending")).toBe(false);
+    saveStoredBalanceInput(storage, "cashbackPending", 12.34);
+    expect(hasStoredBalanceInput(storage, "cashbackPending")).toBe(true);
 
-    removeStoredBalanceInput(storage, "trading212Cash");
-    expect(hasStoredBalanceInput(storage, "trading212Cash")).toBe(false);
+    removeStoredBalanceInput(storage, "cashbackPending");
+    expect(hasStoredBalanceInput(storage, "cashbackPending")).toBe(false);
+  });
+
+  it("removes legacy live Trading 212 overrides", () => {
+    const cashKey = "finance-dashboard.balance-calculation.v1.trading212Cash";
+    const interestKey =
+      "finance-dashboard.balance-calculation.v1.trading212InterestToday";
+    const storage = createStorage({
+      [cashKey]: "12.34",
+      [interestKey]: "56.78",
+    });
+
+    removeLegacyLiveBalanceInputs(storage);
+
+    expect(storage.getItem(cashKey)).toBeNull();
+    expect(storage.getItem(interestKey)).toBeNull();
   });
 });
